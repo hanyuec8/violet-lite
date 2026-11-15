@@ -22,7 +22,7 @@ class PatchModel {
 final patches = [
   PatchModel(
     dateTime: DateTime(2026, 11, 15),
-    version: '2.1.4 Patch',
+    version: '2.2.5 Patch',
     contents: [
       'Dialogue Search: added on-device Korean dialogue search (Rust FFI) and auto-restorer for Korean-English typos',
       'Optimization: added 100MB image disk cache budget management and page count filtering in bookmarks',
