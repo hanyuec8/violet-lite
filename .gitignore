@@ -13,3 +13,5 @@
 /testimage/
 **/__pycache__/
 logo_transparent.png
+/docs/
+/hsync/
