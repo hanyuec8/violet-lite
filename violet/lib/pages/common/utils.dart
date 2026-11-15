@@ -52,8 +52,8 @@ Future showArticleInfoRaw({
   // 메타데이터 보강, 이미지 프로바이더 생성, 북마크 상태 조회를 병렬로 수행하여 진입 지연을 최소화합니다.
   Future<void> enrichMetadataFuture = Future.value();
   if (!hasNoValidQuery &&
-      (queryResult.result['source'] == 'pupil' ||
-          queryResult.result['source'] == 'pupil_only' ||
+      (queryResult.result['source'] == 'hitomi' ||
+          queryResult.result['source'] == 'hitomi_only' ||
           queryResult.result['ExistOnHitomi'] == 1 ||
           queryResult.groups() == null ||
           queryResult.groups() == 'N/A')) {

@@ -1,11 +1,13 @@
 // This source code is a part of Project Violet.
 // Copyright (C) 2020-2026. violet-team. Licensed under the Apache-2.0 License.
 
+import 'package:violet/component/hangul_auto_restorer.dart';
+import 'package:violet/database/incremental_index_sync.dart';
 import 'package:violet/settings/settings.dart';
 
 /// Translate search query to sql query
 String translate2query(String query, {bool filter = true}) {
-  query = query.trim();
+  query = HangulAutoRestorer.normalizeQuery(query.trim());
   final tokens = _splitTokens(
     query,
   ).map((x) => x.trim()).where((x) => x != '').toList();
@@ -179,12 +181,28 @@ class _QueryTranslator {
     switch (tagType) {
       case 'male':
       case 'female':
+        if (IncrementalIndexSyncService.isFtsTagsReady) {
+          final ftsToken = token.replaceAll(' ', '_').replaceAll('"', '""');
+          final sub = "Id IN (SELECT rowid FROM FtsTags WHERE Tags MATCH '\"$ftsToken\"')";
+          return negative ? 'NOT ($sub)' : sub;
+        }
         name = '|${token.replaceAll('_', ' ')}|';
         break;
 
       case 'tag':
       case 'series':
       case 'character':
+        if (IncrementalIndexSyncService.isFtsTagsReady) {
+          final ftsCol = tagType == 'tag'
+              ? 'Tags'
+              : tagType == 'series'
+                  ? 'Series'
+                  : 'Characters';
+          final ftsToken = ss[1].replaceAll(' ', '_').replaceAll('"', '""');
+          final sub =
+              "Id IN (SELECT rowid FROM FtsTags WHERE $ftsCol MATCH '\"$ftsToken\"')";
+          return negative ? 'NOT ($sub)' : sub;
+        }
         name = '|${ss[1].replaceAll('_', ' ')}|';
         break;
 
@@ -193,20 +211,28 @@ class _QueryTranslator {
         // 단어 단위 경계(Word Boundary) 매칭: 성/이름 단독 검색(tadataka)은 유지하면서
         // in, yu, rin 등 짧은 철자가 단어 중간에 낀 엉뚱한 작가들의 오매칭을 원천 차단
         name = ss[1].replaceAll('_', ' ');
+        final sanitizedArtist = name.replaceAll("'", "''");
         final compare =
-            "($column LIKE '%|$name|%' OR $column LIKE '%|$name %' OR $column LIKE '% $name|%' OR $column LIKE '% $name %')";
+            "($column LIKE '%|$sanitizedArtist|%' OR $column LIKE '%|$sanitizedArtist %' OR $column LIKE '% $sanitizedArtist|%' OR $column LIKE '% $sanitizedArtist %')";
         return negative ? 'NOT $compare' : compare;
 
       case 'uploader':
-        name = ss[1];
-        break;
+        final sanitizedUp = ss[1].replaceAll("'", "''");
+        final upCompare = "Uploader = '$sanitizedUp' COLLATE NOCASE";
+        return negative ? '($upCompare) IS NOT 1' : upCompare;
 
       case 'lang':
       case 'language':
       case 'type':
+        final exactVal =
+            ss[1].replaceAll('_', ' ').toLowerCase().replaceAll("'", "''");
+        final exactCmp = "$column = '$exactVal'";
+        return negative ? '($exactCmp) IS NOT 1' : exactCmp;
+
       case 'class':
-        name = ss[1].replaceAll('_', ' ');
-        break;
+        final exactClass = ss[1].replaceAll('_', ' ').replaceAll("'", "''");
+        final classCmp = "$column = '$exactClass' COLLATE NOCASE";
+        return negative ? '($classCmp) IS NOT 1' : classCmp;
     }
 
     name = name.replaceAll("'", "''");
@@ -282,7 +308,28 @@ class _QueryTranslator {
 
   String parseTitle(String token, bool negative) {
     final sanitized = token.replaceAll("'", "''");
-    return negative ? "Title NOT LIKE '%$sanitized%'" : "Title LIKE '%$sanitized%'";
+    final restoredKor = Settings.enableHangulTypoRestore.value
+        ? HangulAutoRestorer.tryRestoreKoreanWord(token)
+        : null;
+
+    if (restoredKor != null && restoredKor != token) {
+      final sanitizedKor = restoredKor.replaceAll("'", "''");
+      final expr =
+          "(Title LIKE '%$sanitized%' OR Title LIKE '%$sanitizedKor%')";
+      return negative ? 'NOT $expr' : expr;
+    }
+
+    if (IncrementalIndexSyncService.isFtsTitleReady &&
+        token.runes.length >= 3 &&
+        !token.contains('"')) {
+      final ftsSub =
+          "Id IN (SELECT rowid FROM FtsTitle WHERE Title MATCH '\"$sanitized\"')";
+      return negative ? 'NOT ($ftsSub)' : ftsSub;
+    }
+
+    return negative
+        ? "Title NOT LIKE '%$sanitized%'"
+        : "Title LIKE '%$sanitized%'";
   }
 
   String parseLogicalExpression() {

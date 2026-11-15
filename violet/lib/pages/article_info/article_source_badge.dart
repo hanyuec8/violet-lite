@@ -18,7 +18,7 @@ class ArticleSourceBadge extends StatefulWidget {
 class _ArticleSourceBadgeState extends State<ArticleSourceBadge> {
   late String _source;
   bool _isCommon = false;
-  bool _isPupilOnly = false;
+  bool _isHitomiOnly = false;
   bool _hasEHash = false;
   bool _hasHitomi = false;
 
@@ -40,12 +40,14 @@ class _ArticleSourceBadgeState extends State<ArticleSourceBadge> {
     final result = widget.data.queryResult.result;
     _source = (result['source'] ?? '').toString();
     _isCommon = result['is_common'] == true || _source == 'common';
-    _isPupilOnly = HybridLoader.isPupilOnly(widget.data.queryResult);
+    _isHitomiOnly = HybridLoader.isHitomiOnly(widget.data.queryResult);
     _hasEHash = result['EHash'] != null;
-    _hasHitomi = result['ExistOnHitomi'] == 1 || _source == 'pupil' || _isPupilOnly;
+    _hasHitomi = result['ExistOnHitomi'] == 1 ||
+        _source == 'hitomi' ||
+        _isHitomiOnly;
 
-    // Pupil 단독으로 명시된 작품은 공통으로 오판되지 않도록 보호
-    if (_isPupilOnly) {
+    // Hitomi 단독으로 명시된 작품은 공통으로 오판되지 않도록 보호
+    if (_isHitomiOnly) {
       _isCommon = false;
       _hasEHash = false;
     } else if (_isCommon || (_hasEHash && _hasHitomi)) {
@@ -65,17 +67,17 @@ class _ArticleSourceBadgeState extends State<ArticleSourceBadge> {
       badgeColor = Colors.redAccent;
       badgeLabel = '삭제 보존작 (Expunged)';
       badgeIcon = MdiIcons.deleteRestore;
-    } else if (_isPupilOnly) {
+    } else if (_isHitomiOnly) {
       badgeColor = Colors.deepOrange;
-      badgeLabel = 'Pupil 방식 (단독)';
+      badgeLabel = 'Hitomi 방식 (단독)';
       badgeIcon = MdiIcons.eyeOutline;
     } else if (_isCommon || (_hasHitomi && _hasEHash)) {
       badgeColor = Colors.teal;
-      badgeLabel = 'Violet & Pupil 공통';
+      badgeLabel = 'Violet & Hitomi 공통';
       badgeIcon = MdiIcons.swapHorizontalCircleOutline;
     } else if (_hasHitomi) {
       badgeColor = Colors.orange;
-      badgeLabel = 'Pupil 방식 (Hitomi)';
+      badgeLabel = 'Hitomi 방식';
       badgeIcon = MdiIcons.eyeOutline;
     } else {
       badgeColor = Colors.deepPurple;

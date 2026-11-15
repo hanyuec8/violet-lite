@@ -8,6 +8,7 @@ import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:synchronized/synchronized.dart';
+import 'package:violet/database/incremental_index_sync.dart';
 
 class DataBaseManager {
   String? dbPath;
@@ -71,11 +72,15 @@ class DataBaseManager {
   }
 
   Future<void> _openInner() async {
+    final wasNull = db == null;
     if (Platform.isAndroid || Platform.isIOS) {
       db ??= await openDatabase(dbPath!);
     } else {
       print(dbPath!);
       db ??= await databaseFactoryFfi.openDatabase(dbPath!);
+    }
+    if (wasNull && db != null) {
+      await IncrementalIndexSyncService.initializeOnOpen(db!);
     }
   }
 

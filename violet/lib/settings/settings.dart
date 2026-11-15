@@ -382,8 +382,8 @@ class Settings {
     'lastSearchArticleTitle',
     '',
   );
-  static final lastSearchIsPupil = SettingItem<bool>(
-    'lastSearchIsPupil',
+  static final lastSearchIsHitomiOnly = SettingItem<bool>(
+    'lastSearchIsHitomiOnly',
     false,
   );
 
@@ -447,6 +447,36 @@ class Settings {
   );
 
   static final useChunkSync = SettingItem<bool>('useChunkSync', true);
+
+  // Korean-English Typo Auto-Restorer & Mobile Rust Message Search (Opt-in)
+  static final enableHangulTypoRestore = SettingItem<bool>(
+    'enableHangulTypoRestore',
+    true,
+  );
+  static final enableMessageSearch = SettingItem<bool>(
+    'enableMessageSearch',
+    false,
+  );
+  static final messageSearchGridMode = SettingItem<bool>(
+    'messageSearchGridMode',
+    false,
+  );
+  static final messageSearchMemoryBudgetMb = SettingItem<int>(
+    'messageSearchMemoryBudgetMb',
+    256,
+  );
+  static final messageCorpusUrl = SettingItem<String>(
+    'messageCorpusUrl',
+    'https://github.com/hanyuec8/violet-lite/releases/download/database/merged-ko.fscm.7z',
+  );
+  static final messageCorpusVersion = SettingItem<String>(
+    'messageCorpusVersion',
+    '',
+  );
+  static final lastMessageCorpusSyncTime = SettingItem<String>(
+    'lastMessageCorpusSyncTime',
+    '',
+  );
 
   static Future<void> initFirst() async {
     prefs = await SharedPreferences.getInstance();

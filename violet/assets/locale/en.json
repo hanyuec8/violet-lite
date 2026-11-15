@@ -328,5 +328,8 @@
   "ignoretimeout": "Ignore Timeout",
   "cropbookmark": "Crop Bookmark",
   "cropbookmarkdesc": "Expore your crop images!",
-  "recordsearchdatabaseonly": "Use database search only in read record"
+  "recordsearchdatabaseonly": "Use database search only in read record",
+  "hangultyporestore": "Korean-English Typo Auto-Restorer",
+  "pagecountfilter": "Page Count Filter",
+  "mobilemessagesearch": "Mobile Lightweight Korean Dialogue Search"
 }

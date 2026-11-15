@@ -10,6 +10,7 @@ import 'package:flare_flutter/flare_controls.dart';
 import 'package:flutter/material.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:violet/algorithm/distance.dart';
+import 'package:violet/component/hangul_auto_restorer.dart';
 import 'package:violet/component/hitomi/displayed_tag.dart';
 import 'package:violet/component/index.dart';
 import 'package:violet/context/modal_bottom_sheet_context.dart';
@@ -245,7 +246,7 @@ class _SearchBarPageState extends State<SearchBarPage>
         ),
         child: Text(Translations.instance!.trans('search')),
         onPressed: () async {
-          var search = _searchController.text;
+          var search = HangulAutoRestorer.normalizeQuery(_searchController.text);
           if (search.split(' ').any((x) => x == 'random')) {
             search = search.split(' ').where((x) => x != 'random').join(' ');
             search += ' random:${Random().nextDouble() + 1}';
@@ -846,9 +847,46 @@ class _SearchBarPageState extends State<SearchBarPage>
     _searchText = target;
     latestToken = token;
 
+    final effectiveToken = Settings.enableHangulTypoRestore.value
+        ? (HangulAutoRestorer.analyzeToken(token).restoredExpression ?? token)
+        : token;
+    final analyzedTypo = Settings.enableHangulTypoRestore.value
+        ? HangulAutoRestorer.analyzeToken(token)
+        : null;
+
     final result = <(DisplayedTag, int)>[];
 
-    if (token == 'page') {
+    // 영타로 한글을 친 경우(예: eksehrdutjd -> 단독여성) 또는 한타 접두사(예: ㅔㅁㅎㄷ>100 -> page>100) 즉시 원탭 복원 칩 제공
+    if (analyzedTypo != null) {
+      if (analyzedTypo.restoredExpression != null &&
+          (analyzedTypo.restoredExpression!.contains('>') ||
+              analyzedTypo.restoredExpression!.contains('<') ||
+              analyzedTypo.restoredExpression!.contains('='))) {
+        result.add((
+          DisplayedTag(
+            group: analyzedTypo.normalizedPrefix ?? 'prefix',
+            name: analyzedTypo.restoredExpression!.replaceFirst(
+              '${analyzedTypo.normalizedPrefix ?? ''}',
+              '',
+            ),
+            translated: '오타 복원: ${analyzedTypo.restoredExpression}',
+          ),
+          0,
+        ));
+      } else if (analyzedTypo.normalizedPrefix == null &&
+          analyzedTypo.restoredHangul != null) {
+        result.add((
+          DisplayedTag(
+            group: 'prefix',
+            name: analyzedTypo.restoredHangul!,
+            translated: '한타 복원: ${analyzedTypo.restoredHangul}',
+          ),
+          0,
+        ));
+      }
+    }
+
+    if (effectiveToken == 'page') {
       result.addAll(
         [
           '>',
@@ -859,7 +897,7 @@ class _SearchBarPageState extends State<SearchBarPage>
           '<>',
         ].map((e) => (DisplayedTag(group: 'page', name: e), 0)),
       );
-    } else if (token == 'id') {
+    } else if (effectiveToken == 'id') {
       result.addAll(
         [
           '1000000~2000000',
@@ -870,7 +908,7 @@ class _SearchBarPageState extends State<SearchBarPage>
           '=',
         ].map((e) => (DisplayedTag(group: 'id', name: e), 0)),
       );
-    } else if (token == 'date') {
+    } else if (effectiveToken == 'date') {
       result.addAll(
         [
           '2024-01-01~2024-12-31',
@@ -879,8 +917,7 @@ class _SearchBarPageState extends State<SearchBarPage>
           '<=',
         ].map((e) => (DisplayedTag(group: 'date', name: e), 0)),
       );
-    
-    } else if (token == 'order') {
+    } else if (effectiveToken == 'order') {
       result.addAll(
         [
           'week',
@@ -895,17 +932,17 @@ class _SearchBarPageState extends State<SearchBarPage>
 
     if (!Settings.searchUseFuzzy.value) {
       final searchResult = (await HentaiIndex.queryAutoComplete(
-        token,
+        effectiveToken,
         Settings.searchUseTranslated.value,
       )).take(_searchResultMaximum).toList();
-      if (searchResult.isEmpty) _nothing = true;
+      if (searchResult.isEmpty && result.isEmpty) _nothing = true;
       result.addAll(searchResult);
     } else {
       final searchResult = (await HentaiIndex.queryAutoCompleteFuzzy(
-        token,
+        effectiveToken,
         Settings.searchUseTranslated.value,
       )).take(_searchResultMaximum).toList();
-      if (searchResult.isEmpty) _nothing = true;
+      if (searchResult.isEmpty && result.isEmpty) _nothing = true;
       result.addAll(searchResult);
     }
 

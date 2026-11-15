@@ -14,6 +14,7 @@ import 'package:image_size_getter/image_size_getter.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:violet/component/hentai.dart';
+import 'package:violet/component/hitomi/message_corpus_manager.dart';
 import 'package:violet/component/hitomi/message_search.dart';
 import 'package:violet/component/hitomi/tag_translate.dart';
 import 'package:violet/database/query.dart';
@@ -208,7 +209,8 @@ class _ViewerOverlayState extends State<ViewerOverlay> {
                               children: [
                                 _appBarBookmark(),
                                 _appBarInfo(),
-                                if (Settings.inViewerMessageSearch.value)
+                                if (Settings.inViewerMessageSearch.value ||
+                                    MessageCorpusManager.instance.isReady)
                                   _appBarSearch(),
                               ],
                             ),
@@ -866,9 +868,14 @@ class _ViewerOverlayState extends State<ViewerOverlay> {
         const Icon(Icons.search_rounded, color: Colors.white),
         const SizedBox(width: 16.0),
         Expanded(
-          child: TypeAheadField(
+          child: TypeAheadField<(String, String, int)>(
+            controller: c.searchText,
             suggestionsController: c.suggestionsController,
             suggestionsCallback: (pattern) async {
+              if (MessageSearch.autocompleteTarget.isEmpty ||
+                  pattern.trim().isEmpty) {
+                return const <(String, String, int)>[];
+              }
               var ppattern = TagTranslate.disassembly(pattern);
 
               return MessageSearch.autocompleteTarget

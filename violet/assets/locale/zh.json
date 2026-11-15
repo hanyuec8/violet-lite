@@ -328,5 +328,8 @@
   "ignoretimeout": "Ignore Timeout",
   "cropbookmark": "Crop Bookmark",
   "cropbookmarkdesc": "Expore your crop images!",
-  "recordsearchdatabaseonly": "Use database search only in read history"
+  "recordsearchdatabaseonly": "Use database search only in read history",
+  "hangultyporestore": "韩英输入错字自动还原",
+  "pagecountfilter": "页数筛选",
+  "mobilemessagesearch": "移动端轻量韩语台词搜索引擎"
 }

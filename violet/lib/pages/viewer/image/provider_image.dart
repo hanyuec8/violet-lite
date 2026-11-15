@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:extended_image/extended_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:violet/component/app_cache_manager.dart';
 import 'package:violet/log/log.dart';
 import 'package:violet/pages/segment/platform_navigator.dart';
 import 'package:violet/pages/viewer/viewer_controller.dart';
@@ -72,6 +73,7 @@ class _ProviderImageState extends State<ProviderImage> {
       widget.imgUrl,
       key: widget.imgKey,
       headers: widget.imgHeader,
+      cacheMaxAge: AppCacheManager.viewerCacheMaxAge,
       retries: 100,
       timeRetry: const Duration(milliseconds: 300),
       fit: BoxFit.cover,

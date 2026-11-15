@@ -328,5 +328,8 @@
   "ignoretimeout": "時間切れを無視",
   "cropbookmark": "切り取りブックマーク",
   "cropbookmarkdesc": "切り取った画像集を閲覧!",
-  "recordsearchdatabaseonly": "Use database search only in read history"
+  "recordsearchdatabaseonly": "Use database search only in read history",
+  "hangultyporestore": "韓英タイポ自動復元",
+  "pagecountfilter": "ページ数フィルター",
+  "mobilemessagesearch": "モバイル軽量韓国語セリフ検索エンジン"
 }

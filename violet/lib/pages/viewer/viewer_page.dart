@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
+import 'package:violet/component/app_cache_manager.dart';
 import 'package:violet/context/viewer_context.dart';
 import 'package:violet/database/query.dart';
 import 'package:violet/database/user/bookmark.dart';
@@ -161,6 +162,7 @@ class _ViewerPageState extends State<ViewerPage> {
     Get.delete<ViewerController>(tag: getxId);
 
     if (_nextPageTimer != null) _nextPageTimer!.cancel();
+    unawaited(AppCacheManager.enforceBudget());
     super.dispose();
   }
 

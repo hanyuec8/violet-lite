@@ -3,12 +3,14 @@
 
 import 'dart:io';
 
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:extended_image/extended_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_typeahead/flutter_typeahead.dart';
 import 'package:get/get.dart';
+import 'package:violet/component/app_cache_manager.dart';
+import 'package:violet/component/hitomi/message_corpus_manager.dart';
 import 'package:violet/component/hitomi/message_search.dart';
 import 'package:violet/log/log.dart';
 import 'package:violet/pages/viewer/others/preload_page_view.dart';
@@ -234,14 +236,20 @@ class ViewerController extends GetxController {
     await load(index);
 
     if (!context.mounted) return;
+    final ImageProvider baseProvider = ExtendedNetworkImageProvider(
+      urlCache[index]!.value,
+      headers: headerCache[index],
+      cache: true,
+      cacheMaxAge: AppCacheManager.viewerCacheMaxAge,
+    );
+    final ImageProvider targetProvider = Settings.useLowPerf.value
+        ? ExtendedResizeImage.resizeIfNeeded(
+            provider: baseProvider,
+            cacheHeight: (MediaQuery.of(context).size.width * 2.0).toInt(),
+          )
+        : baseProvider;
     await precacheImage(
-      CachedNetworkImageProvider(
-        urlCache[index]!.value,
-        headers: headerCache[index],
-        maxWidth: Settings.useLowPerf.value
-            ? (MediaQuery.of(context).size.width * 1.5).toInt()
-            : null,
-      ),
+      targetProvider,
       context,
       onError: (error, stackTrace) {
         Logger.error('[precache-error] E: $error\n$stackTrace');
@@ -293,18 +301,40 @@ class ViewerController extends GetxController {
   }
 
   onModifiedText() async {
-    suggestionsController!.close();
-    if (latestSearch == searchText.text) return;
-    latestSearch == searchText.text;
-    messages = (await VioletServer.searchMessageWord(
-      articleId,
-      searchText.text,
-    ))!;
-    messages = messages.where((e) => e.matchScore >= 80.0).toList();
+    suggestionsController?.close();
+    final query = searchText.text.trim();
+    if (query.isEmpty || latestSearch == query) return;
+    latestSearch = query;
+
+    if (MessageCorpusManager.instance.isReady) {
+      final hits =
+          await MessageCorpusManager.instance.searchInArticle(articleId, query);
+      messages = hits
+          .where((h) => h.matchScore >= 75.0)
+          .map(
+            (h) => MessageSearchResult(
+              matchScore: h.matchScore,
+              id: h.articleId,
+              page: h.page,
+              correctness: h.correctness,
+              rect: h.rect.toList(),
+              rawText: h.rawText,
+            ),
+          )
+          .toList();
+    } else {
+      final remote = await VioletServer.searchMessageWord(articleId, query);
+      messages = (remote ?? <MessageSearchResult>[])
+          .where((e) => e.matchScore >= 80.0)
+          .toList();
+    }
+
     messages.sort((a, b) => a.page.compareTo(b.page));
-
+    if (messages.isEmpty) {
+      messageIndex.value = 0;
+      return;
+    }
     messageIndex.value = 1;
-
     gotoSearchIndex();
   }
 

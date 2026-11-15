@@ -56,10 +56,10 @@ class SearchPageController extends GetxController {
   int baseCount = 0; // using for user custom page index
   bool isFilterUsed = false;
 
-  var isPupilFilterUsed = false.obs;
-  var isPupilFilterLoading = false.obs;
-  List<QueryResult> pupilFilterResult = [];
-  int pupilFilterPage = 1;
+  var isHitomiFilterUsed = false.obs;
+  var isHitomiFilterLoading = false.obs;
+  List<QueryResult> hitomiFilterResult = [];
+  int hitomiFilterPage = 1;
   int mainHybridPage = 1;
 
   final void Function({bool isAppend}) reloadForce;
@@ -85,13 +85,13 @@ class SearchPageController extends GetxController {
   void applyExcludedTagsFilter() {
     final curQuery = latestQuery?.$2 ?? '';
     queryResult.removeWhere((item) => Settings.isExcluded(item, currentQuery: curQuery));
-    pupilFilterResult.removeWhere((item) => Settings.isExcluded(item, currentQuery: curQuery));
-    searchTotalResultCount.value = isPupilFilterUsed.value
-        ? pupilFilterResult.length
+    hitomiFilterResult.removeWhere((item) => Settings.isExcluded(item, currentQuery: curQuery));
+    searchTotalResultCount.value = isHitomiFilterUsed.value
+        ? hitomiFilterResult.length
         : queryResult.length;
     reloadForce();
 
-    final count = isPupilFilterUsed.value ? pupilFilterResult.length : queryResult.length;
+    final count = isHitomiFilterUsed.value ? hitomiFilterResult.length : queryResult.length;
     if (count < 15 && !_queryEnd) {
       loadNextQuery();
     }
@@ -161,8 +161,8 @@ class SearchPageController extends GetxController {
       final isUserScrolling = scrollController?.hasClients == true &&
           scrollController!.position.userScrollDirection != ScrollDirection.idle;
 
-      // lang:korean 및 pupil 기능을 켰을 때만 마지막으로 본 위치를 기억합니다 (그 외에는 절대 기록하지 않음).
-      final canRecordLastPosition = isPupilFilterUsed.value && isCurrentSearchKorean();
+      // lang:korean 및 Hitomi 전용 필터를 켰을 때만 마지막으로 본 위치를 기억합니다 (그 외에는 절대 기록하지 않음).
+      final canRecordLastPosition = isHitomiFilterUsed.value && isCurrentSearchKorean();
 
       if (isUserScrolling && canRecordLastPosition) {
         final absolutePosition = curI + baseCount;
@@ -177,7 +177,7 @@ class SearchPageController extends GetxController {
           if (id > 0 && Settings.lastSearchArticleId.value != id) {
             Settings.lastSearchArticleId.setValue(id);
             Settings.lastSearchArticleTitle.setValue(item.title() ?? '');
-            Settings.lastSearchIsPupil.setValue(true);
+            Settings.lastSearchIsHitomiOnly.setValue(true);
           }
         }
       }
@@ -215,7 +215,7 @@ class SearchPageController extends GetxController {
     final maxScroll = scrollController!.position.maxScrollExtent;
     final curOffset = scrollController!.offset;
 
-    final isTrigger = isPupilFilterUsed.value
+    final isTrigger = isHitomiFilterUsed.value
         ? (maxScroll > 50 && curOffset > maxScroll * 0.2)
         : (maxScroll > 200 && curOffset > maxScroll * 0.6);
 
@@ -265,8 +265,8 @@ class SearchPageController extends GetxController {
     }
     await aquire;
 
-    if (isPupilFilterUsed.value) {
-      isPupilFilterLoading.value = true;
+    if (isHitomiFilterUsed.value) {
+      isHitomiFilterLoading.value = true;
     }
 
     try {
@@ -277,18 +277,18 @@ class SearchPageController extends GetxController {
       final query = latestQuery?.$2 ?? '';
 
       // 메인페이지와 동일한 고속 하이브리드 로더(0.3~0.5s)를 사용합니다.
-      // Pupil 필터 상태:
-      // - 현재 누적된 Pupil 단독작이 12개 미만인 경우, 화면에 스크롤바가 생길 수 있도록 최소 12개 이상이 될 때까지 연속으로 빠르게 채웁니다.
+      // Hitomi 단독 필터 상태:
+      // - 현재 누적된 Hitomi 단독작이 12개 미만인 경우, 화면에 스크롤바가 생길 수 있도록 최소 12개 이상이 될 때까지 연속으로 빠르게 채웁니다.
       // - 이미 12개 이상 확보되어 스크롤이 가능한 상태라면 스크롤 시 1~2회 배치(0.3~0.5초)로 가볍게 새 작품들을 덧붙입니다.
       int attempts = 0;
-      final targetCount = isPupilFilterUsed.value
-          ? (pupilFilterResult.length < 12 ? 12 : pupilFilterResult.length + 3)
+      final targetCount = isHitomiFilterUsed.value
+          ? (hitomiFilterResult.length < 12 ? 12 : hitomiFilterResult.length + 3)
           : 0;
-      final maxAttempts = isPupilFilterUsed.value
-          ? (pupilFilterResult.length < 12 ? 8 : 2)
+      final maxAttempts = isHitomiFilterUsed.value
+          ? (hitomiFilterResult.length < 12 ? 8 : 2)
           : 1;
-      final hadExistingItems = isPupilFilterUsed.value
-          ? pupilFilterResult.isNotEmpty
+      final hadExistingItems = isHitomiFilterUsed.value
+          ? hitomiFilterResult.isNotEmpty
           : queryResult.isNotEmpty;
 
       while (attempts < maxAttempts) {
@@ -316,35 +316,35 @@ class SearchPageController extends GetxController {
 
         queryResult.addAll(newUnique);
 
-        // Pupil 단독작 선별 및 pupilFilterResult에 누적
-        final newPupilOnly = newUnique.where((e) => HybridLoader.isPupilOnly(e)).toList();
-        final existingPupilIds = pupilFilterResult.map((e) => e.id()).toSet();
-        final uniquePupilOnly = newPupilOnly.where((e) => !existingPupilIds.contains(e.id())).toList();
+        // Hitomi 단독작 선별 및 hitomiFilterResult에 누적
+        final newHitomiOnly = newUnique.where((e) => HybridLoader.isHitomiOnly(e)).toList();
+        final existingHitomiIds = hitomiFilterResult.map((e) => e.id()).toSet();
+        final uniqueHitomiOnly = newHitomiOnly.where((e) => !existingHitomiIds.contains(e.id())).toList();
 
-        if (uniquePupilOnly.isNotEmpty) {
-          pupilFilterResult.addAll(uniquePupilOnly);
+        if (uniqueHitomiOnly.isNotEmpty) {
+          hitomiFilterResult.addAll(uniqueHitomiOnly);
         }
 
-        // 일반 모드이거나, Pupil 필터 모드에서 목표 수량(12개 이상)에 도달했으면 루프 종료
-        if (!isPupilFilterUsed.value || pupilFilterResult.length >= targetCount) {
+        // 일반 모드이거나, Hitomi 단독 필터 모드에서 목표 수량(12개 이상)에 도달했으면 루프 종료
+        if (!isHitomiFilterUsed.value || hitomiFilterResult.length >= targetCount) {
           break;
         }
       }
 
       if (filterController.isPopulationSort) {
         Population.sortByPopulation(queryResult);
-        if (isPupilFilterUsed.value) {
-          Population.sortByPopulation(pupilFilterResult);
+        if (isHitomiFilterUsed.value) {
+          Population.sortByPopulation(hitomiFilterResult);
         }
       }
 
       if (isFilterUsed) {
-        final target = isPupilFilterUsed.value ? pupilFilterResult : queryResult;
+        final target = isHitomiFilterUsed.value ? hitomiFilterResult : queryResult;
         filterResult = filterController.applyFilter(target);
         searchTotalResultCount.value = baseCount + filterResult.length;
       } else {
-        searchTotalResultCount.value = baseCount + (isPupilFilterUsed.value
-            ? pupilFilterResult.length
+        searchTotalResultCount.value = baseCount + (isHitomiFilterUsed.value
+            ? hitomiFilterResult.length
             : queryResult.length);
       }
 
@@ -357,13 +357,13 @@ class SearchPageController extends GetxController {
       );
       rethrow;
     } finally {
-      isPupilFilterLoading.value = false;
+      isHitomiFilterLoading.value = false;
       _querySem.release();
     }
   }
 
   applyFilter() {
-    final target = isPupilFilterUsed.value ? pupilFilterResult : queryResult;
+    final target = isHitomiFilterUsed.value ? hitomiFilterResult : queryResult;
     filterResult = filterController.applyFilter(target);
     isFilterUsed = true;
   }
@@ -373,7 +373,7 @@ class SearchPageController extends GetxController {
     _scrollInProgress = false;
     itemKeys.clear();
     queryResult = [];
-    pupilFilterResult = [];
+    hitomiFilterResult = [];
 
     // targetPosition(점프 위치)를 기반으로 시작 페이지 및 페이지 기준 오프셋 계산 (1-indexed)
     final startPage = (targetPosition ~/ defaultPageSize) + 1;
@@ -381,7 +381,7 @@ class SearchPageController extends GetxController {
     baseCount = pageBaseOffset;
     final targetIndexInPage = targetPosition - pageBaseOffset;
 
-    pupilFilterPage = startPage;
+    hitomiFilterPage = startPage;
     mainHybridPage = startPage;
 
     filterController = FilterController(
@@ -391,8 +391,8 @@ class SearchPageController extends GetxController {
     searchTotalResultCount.value = baseCount;
     searchPageNum.value = targetIndexInPage;
 
-    // 명시적인 위치 점프(targetPosition > 0)이고 lang:korean + pupil 기능이 켜져 있을 때만 위치를 갱신합니다.
-    if (targetPosition > 0 && isPupilFilterUsed.value && isCurrentSearchKorean()) {
+    // 명시적인 위치 점프(targetPosition > 0)이고 lang:korean + Hitomi 전용 필터가 켜져 있을 때만 위치를 갱신합니다.
+    if (targetPosition > 0 && isHitomiFilterUsed.value && isCurrentSearchKorean()) {
       Settings.lastSearchPosition.setValue(targetPosition);
     }
 
@@ -429,16 +429,16 @@ class SearchPageController extends GetxController {
   Future<void> jumpToLastArticle(BuildContext context) async {
     final targetId = Settings.lastSearchArticleId.value;
     final targetPos = Settings.lastSearchPosition.value;
-    final wasPupil = Settings.lastSearchIsPupil.value;
+    final wasHitomiOnly = Settings.lastSearchIsHitomiOnly.value;
 
     if (targetId <= 0 && targetPos <= 0) {
       Fluttertoast.showToast(msg: '마지막으로 본 작품 기록이 없습니다.');
       return;
     }
 
-    // 1. 당시 Pupil 필터 상태 복원
-    if (wasPupil && !isPupilFilterUsed.value) {
-      await togglePupilFilter(context);
+    // 1. 당시 Hitomi 전용 필터 상태 복원
+    if (wasHitomiOnly && !isHitomiFilterUsed.value) {
+      await toggleHitomiOnlyFilter(context);
     }
 
     // 2. 현재 메모리에 로드된 리스트에서 타깃 ID 탐색 (0ms 즉시 스크롤)
@@ -502,16 +502,16 @@ class SearchPageController extends GetxController {
 
   List<QueryResult> getSearchList() {
     if (isFilterUsed) return filterResult;
-    if (isPupilFilterUsed.value) return pupilFilterResult;
+    if (isHitomiFilterUsed.value) return hitomiFilterResult;
     return queryResult;
   }
 
-  Future<void> togglePupilFilter(BuildContext context) async {
-    if (isPupilFilterLoading.value) return;
+  Future<void> toggleHitomiOnlyFilter(BuildContext context) async {
+    if (isHitomiFilterLoading.value) return;
 
-    if (isPupilFilterUsed.value) {
-      // Pupil 필터 해제 -> 메인 전체 작품 목록으로 0ms 즉시 복원
-      isPupilFilterUsed.value = false;
+    if (isHitomiFilterUsed.value) {
+      // Hitomi 필터 해제 -> 메인 전체 작품 목록으로 0ms 즉시 복원
+      isHitomiFilterUsed.value = false;
       if (isFilterUsed) {
         filterResult = filterController.applyFilter(queryResult);
         searchTotalResultCount.value = baseCount + filterResult.length;
@@ -520,41 +520,41 @@ class SearchPageController extends GetxController {
       }
       reloadForce();
       Fluttertoast.showToast(
-        msg: 'Pupil 필터 해제 (전체 ${queryResult.length}건)',
+        msg: 'Hitomi 전용 필터 해제 (전체 ${queryResult.length}건)',
         toastLength: Toast.LENGTH_SHORT,
       );
       return;
     }
 
-    // Pupil 필터 활성화
-    isPupilFilterUsed.value = true;
+    // Hitomi 전용 필터 활성화
+    isHitomiFilterUsed.value = true;
 
-    // 1) 0ms 즉각 노출: 지금까지 queryResult에 로드된 작품들 중 Pupil 단독작을 즉시 추출
-    final cachedPupil = queryResult.where((item) => HybridLoader.isPupilOnly(item)).toList();
-    pupilFilterResult = List<QueryResult>.from(cachedPupil);
+    // 1) 0ms 즉각 노출: 지금까지 queryResult에 로드된 작품들 중 Hitomi 단독작을 즉시 추출
+    final cachedHitomi = queryResult.where((item) => HybridLoader.isHitomiOnly(item)).toList();
+    hitomiFilterResult = List<QueryResult>.from(cachedHitomi);
 
     if (isFilterUsed) {
-      filterResult = filterController.applyFilter(pupilFilterResult);
+      filterResult = filterController.applyFilter(hitomiFilterResult);
       searchTotalResultCount.value = baseCount + filterResult.length;
     } else {
-      searchTotalResultCount.value = baseCount + pupilFilterResult.length;
+      searchTotalResultCount.value = baseCount + hitomiFilterResult.length;
     }
     reloadForce();
 
-    // 2) 만약 기존에 캐시된 Pupil 단독작이 스크롤 가능 수량(12개) 미만이라면
+    // 2) 만약 기존에 캐시된 Hitomi 단독작이 스크롤 가능 수량(12개) 미만이라면
     // 화면을 멈추지 않고 비동기로 최소 12개 이상이 채워질 때까지 연속 요청
-    if (pupilFilterResult.length < 12 && !_queryEnd) {
+    if (hitomiFilterResult.length < 12 && !_queryEnd) {
       unawaited(loadNextQuery());
     }
 
-    if (pupilFilterResult.isNotEmpty) {
+    if (hitomiFilterResult.isNotEmpty) {
       Fluttertoast.showToast(
-        msg: 'Pupil 단독 작품 ${pupilFilterResult.length}건 표시 (스크롤 시 계속 로딩)',
+        msg: 'Hitomi 단독 작품 ${hitomiFilterResult.length}건 표시 (스크롤 시 계속 로딩)',
         toastLength: Toast.LENGTH_SHORT,
       );
     } else {
       Fluttertoast.showToast(
-        msg: 'Pupil 단독 작품을 찾는 중...',
+        msg: 'Hitomi 단독 작품을 찾는 중...',
         toastLength: Toast.LENGTH_SHORT,
       );
     }

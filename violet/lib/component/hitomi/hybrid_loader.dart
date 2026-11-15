@@ -50,7 +50,7 @@ class _LruMap<K, V> {
   void clear() => _map.clear();
 }
 
-/// Violet (E-Hentai / 로컬 DB) + Pupil (Hitomi Nozomi Range Request)
+/// Violet (E-Hentai / 로컬 DB) + Hitomi (Nozomi Range Request)
 /// 하이브리드 작품 로더
 class HybridLoader {
   /// 사용자가 설정한 검색 대상 언어 목록 (비어있으면 전체)
@@ -65,7 +65,7 @@ class HybridLoader {
   }
 
   /// 앱 실행 중 유지되는 인메모리 세션 캐시 (LRU 최대 2,000건 제한으로 OOM 방지)
-  /// 품번(Id) -> 뱃지 소스 ('common' | 'pupil' | 'violet' | 'pupil_only')
+  /// 품번(Id) -> 뱃지 소스 ('common' | 'hitomi' | 'violet' | 'hitomi_only')
   static final _LruMap<int, String> _sessionBadgeCache =
       _LruMap<int, String>(capacity: 2000);
 
@@ -155,7 +155,7 @@ class HybridLoader {
         onTimeout: () => <QueryResult>[],
       );
 
-      // 2) Hitomi Nozomi Range Request 스트림 (Pupil 방식)
+      // 2) Hitomi Nozomi Range Request 스트림
       final hitomiFuture = Future<List<QueryResult>>(() async {
         final hitomiList = <QueryResult>[];
         try {
@@ -197,7 +197,7 @@ class HybridLoader {
             }
           }
           for (final qr in hitomiList) {
-            qr.result['source'] = 'pupil';
+            qr.result['source'] = 'hitomi';
           }
           return hitomiList;
         } catch (e, st) {
@@ -784,8 +784,8 @@ class HybridLoader {
 
   /// Hitomi에서 수집된 작품 목록에 대해 로컬 DB, 북마크 DB, E-Hentai 대조군을 종합 검증하여
   /// 기존 Violet/E-Hentai에 존재하는 작품은 'common'으로 확정 승격하고,
-  /// 오직 어디에도 존재하지 않는 순수 Hitomi 독점작만 'pupil_only'로 확정합니다.
-  static Future<void> verifyAndTagPupilArticles(
+  /// 오직 어디에도 존재하지 않는 순수 Hitomi 독점작만 'hitomi_only'로 확정합니다.
+  static Future<void> verifyAndTagHitomiArticles(
     List<QueryResult> items, {
     Set<int>? knownEhIds,
     Set<String>? knownEhTitles,
@@ -881,7 +881,7 @@ class HybridLoader {
       }
     }
 
-    // 4) 철저한 검증 후 판정 확정: 어디에도 속하지 않는 순수 Hitomi 독점작만 pupil_only
+    // 4) 철저한 검증 후 판정 확정: 어디에도 속하지 않는 순수 Hitomi 독점작만 hitomi_only
     for (final item in items) {
       if (item.result['is_common'] == true ||
           item.result['source'] == 'common' ||
@@ -891,18 +891,18 @@ class HybridLoader {
         item.result['is_common'] = true;
         _sessionBadgeCache[item.id()] = 'common';
       } else {
-        item.result['source'] = 'pupil_only';
-        item.result['is_pupil_only'] = true;
-        _sessionBadgeCache[item.id()] = 'pupil_only';
+        item.result['source'] = 'hitomi_only';
+        item.result['is_hitomi_only'] = true;
+        _sessionBadgeCache[item.id()] = 'hitomi_only';
       }
     }
   }
 
-  /// Violet 웹 방식(E-Hentai)과 Pupil 방식(Hitomi) 둘 다에서 보이는 공통 작품은 철저히 제외하고,
-  /// 오직 Pupil 방식으로만 불러올 수 있는 순수 독점/단독 최신 작품만 필터링하여 반환합니다.
+  /// Violet 웹 방식(E-Hentai)과 Hitomi 방식 둘 다에서 보이는 공통 작품은 철저히 제외하고,
+  /// 오직 Hitomi 방식으로만 불러올 수 있는 순수 독점/단독 최신 작품만 필터링하여 반환합니다.
   /// 공통 작품으로 인해 이번 페이지 결과가 비어있더라도, Hitomi 인덱스가 남아있는 한
   /// 연속 탐색하여 최소한의 독점 작품을 확보한 뒤 반환합니다.
-  static Future<({List<QueryResult> results, int nextScanPage, bool hasMore})> fetchPupilOnlyArticles({
+  static Future<({List<QueryResult> results, int nextScanPage, bool hasMore})> fetchHitomiOnlyArticles({
     String query = '',
     int page = 1,
     int pageSize = 30,
@@ -911,7 +911,7 @@ class HybridLoader {
     final selectedLangs = getSelectedLanguages();
     String targetLang = selectedLangs.length == 1 ? selectedLangs.first : 'all';
 
-    final accumulatedPupilOnly = <QueryResult>[];
+    final accumulatedHitomiOnly = <QueryResult>[];
     var currentPage = page;
     var consecutiveEmptyBatches = 0;
     bool hasMore = true;
@@ -921,7 +921,7 @@ class HybridLoader {
     final ehTitles = <String>{};
     bool ehFetched = false;
 
-    while (accumulatedPupilOnly.length < 15 && consecutiveEmptyBatches < 6) {
+    while (accumulatedHitomiOnly.length < 15 && consecutiveEmptyBatches < 6) {
       final ids = await fetchGalleryIdsForQuery(
         query: cleanQuery,
         page: currentPage,
@@ -958,9 +958,9 @@ class HybridLoader {
       for (final hQr in hitomiList) {
         final cached = _sessionBadgeCache[hQr.id()];
         if (cached != null) {
-          if (cached == 'pupil_only') {
-            hQr.result['is_pupil_only'] = true;
-            hQr.result['source'] = 'pupil_only';
+          if (cached == 'hitomi_only') {
+            hQr.result['is_hitomi_only'] = true;
+            hQr.result['source'] = 'hitomi_only';
             candidates.add(hQr);
           }
           continue;
@@ -985,30 +985,30 @@ class HybridLoader {
           } catch (_) {}
         }
 
-        await verifyAndTagPupilArticles(
+        await verifyAndTagHitomiArticles(
           uncachedHitomiList,
           knownEhIds: ehIds,
           knownEhTitles: ehTitles,
         );
 
         for (final hQr in uncachedHitomiList) {
-          if (hQr.result['is_pupil_only'] == true) {
+          if (hQr.result['is_hitomi_only'] == true) {
             candidates.add(hQr);
           }
         }
       }
 
       if (candidates.isNotEmpty) {
-        accumulatedPupilOnly.addAll(candidates);
+        accumulatedHitomiOnly.addAll(candidates);
       } else {
         consecutiveEmptyBatches++;
       }
       currentPage++;
     }
 
-    accumulatedPupilOnly.sort((a, b) => b.id().compareTo(a.id()));
+    accumulatedHitomiOnly.sort((a, b) => b.id().compareTo(a.id()));
     return (
-      results: accumulatedPupilOnly,
+      results: accumulatedHitomiOnly,
       nextScanPage: currentPage,
       hasMore: hasMore,
     );
@@ -1117,6 +1117,12 @@ class HybridLoader {
             final id = row['Id'] as int;
             final dataStr = row['Data'] as String;
             final map = jsonDecode(dataStr) as Map<String, dynamic>;
+            if (map['source'] == 'pupil') map['source'] = 'hitomi';
+            if (map['source'] == 'pupil_only') map['source'] = 'hitomi_only';
+            if (map['is_pupil_only'] == true) {
+              map.remove('is_pupil_only');
+              map['is_hitomi_only'] = true;
+            }
             final qr = QueryResult(result: map);
             _sessionMetadataCache[id] = qr;
             result[id] = qr;
@@ -1184,7 +1190,7 @@ class HybridLoader {
         'Published': article['Published'],
         'Thumbnail': article['Thumbnail'],
         'ExistOnHitomi': 1,
-        'source': 'pupil',
+        'source': 'hitomi',
       };
       final qr = QueryResult(result: meta);
       _sessionMetadataCache[id] = qr;
@@ -1198,15 +1204,15 @@ class HybridLoader {
         return expungedQr;
       }
       return QueryResult(
-        result: {'Id': id, 'Title': '#$id', 'ExistOnHitomi': 1, 'source': 'pupil'},
+        result: {'Id': id, 'Title': '#$id', 'ExistOnHitomi': 1, 'source': 'hitomi'},
       );
     }
   }
 
   /// 메인 화면용 하이브리드 작품 로더 (기본 검색 시 호출)
-  /// Violet(E-Hentai) 방식과 Pupil(Hitomi Nozomi) 방식으로 불러온 모든 작품을
+  /// Violet(E-Hentai) 방식과 Hitomi(Nozomi) 방식으로 불러온 모든 작품을
   /// 병렬로 수집하여 중복 제거 후 합쳐서 반환합니다.
-  /// 둘 다 존재하는 작품은 'common', Hitomi만 있는 작품은 'pupil', E-Hentai만 있는 작품은 'violet' 소스 뱃지가 부여됩니다.
+  /// 둘 다 존재하는 작품은 'common', Hitomi만 있는 작품은 'hitomi', E-Hentai만 있는 작품은 'violet' 소스 뱃지가 부여됩니다.
   static Future<List<QueryResult>> fetchMainHybridArticles({
     String query = '',
     int page = 1,
@@ -1388,8 +1394,8 @@ class HybridLoader {
       filterMaxDate = DateTime.tryParse('$eStr 23:59:59');
     }
 
-    // 1) Pupil 방식: fetchGalleryIdsForQuery 사용 (random 태그 제외한 pureQuery 사용)
-    final pupilFuture = Future<List<QueryResult>>(() async {
+    // 1) Hitomi 방식: fetchGalleryIdsForQuery 사용 (random 태그 제외한 pureQuery 사용)
+    final hitomiFuture = Future<List<QueryResult>>(() async {
       try {
         List<int> ids = [];
         if (effectiveSortMode != SearchSortMode.latest && pureQueryWithoutLang.isEmpty) {
@@ -1438,7 +1444,7 @@ class HybridLoader {
           hitomiList.addAll(await Future.wait(chunkFutures));
         }
         for (final qr in hitomiList) {
-          qr.result['source'] = 'pupil';
+          qr.result['source'] = 'hitomi';
         }
         return hitomiList;
       } catch (e, st) {
@@ -1547,12 +1553,12 @@ class HybridLoader {
       onTimeout: () => <QueryResult>[],
     );
 
-    final responses = await Future.wait([pupilFuture, violetFuture, localDbFuture])
+    final responses = await Future.wait([hitomiFuture, violetFuture, localDbFuture])
         .timeout(
           const Duration(seconds: 14),
           onTimeout: () => [<QueryResult>[], <QueryResult>[], <QueryResult>[]],
         );
-    final pupilList = responses[0];
+    final hitomiList = responses[0];
     final violetList = responses[1];
     final localDbList = responses[2];
 
@@ -1570,8 +1576,8 @@ class HybridLoader {
       merged.add(lItem);
     }
 
-    // Pupil 최신 결과 반영
-    for (final item in pupilList) {
+    // Hitomi 최신 결과 반영
+    for (final item in hitomiList) {
       final id = item.id();
       final title = item.title() ?? '';
 
@@ -1630,11 +1636,11 @@ class HybridLoader {
       }
     }
 
-    // 로컬 DB, 북마크 DB, E-Hentai 대조군을 통해 pupil 작품 전수 정밀 검증
-    final pupilItems = merged.where((m) => m.result['source'] == 'pupil').toList();
-    if (pupilItems.isNotEmpty) {
-      await verifyAndTagPupilArticles(
-        pupilItems,
+    // 로컬 DB, 북마크 DB, E-Hentai 대조군을 통해 Hitomi 작품 전수 정밀 검증
+    final hitomiItems = merged.where((m) => m.result['source'] == 'hitomi').toList();
+    if (hitomiItems.isNotEmpty) {
+      await verifyAndTagHitomiArticles(
+        hitomiItems,
         knownEhIds: ehIds,
         knownEhTitles: ehTitles,
       );
@@ -1688,8 +1694,8 @@ class HybridLoader {
     return merged;
   }
 
-  /// 해당 작품이 Violet에 없는 순수 Pupil 독점작인지 여부를 판별합니다.
-  static bool isPupilOnly(QueryResult item) {
+  /// 해당 작품이 로컬 DB/E-Hentai에 없는 순수 Hitomi 독점작인지 여부를 판별합니다.
+  static bool isHitomiOnly(QueryResult item) {
     final res = item.result;
     if (res['is_common'] == true || res['source'] == 'common' || res['source'] == 'violet') {
       return false;
@@ -1697,10 +1703,10 @@ class HybridLoader {
     if (res['EHash'] != null) return false;
     final cached = _sessionBadgeCache[item.id()];
     if (cached == 'common' || cached == 'violet') return false;
-    if (cached == 'pupil_only' || res['is_pupil_only'] == true || res['source'] == 'pupil_only') {
+    if (cached == 'hitomi_only' || res['is_hitomi_only'] == true || res['source'] == 'hitomi_only') {
       return true;
     }
-    // 명시적으로 검증되지 않은 작품은 Pupil 단독작으로 노출하지 않음 (안전 가드)
+    // 명시적으로 검증되지 않은 작품은 Hitomi 단독작으로 노출하지 않음 (안전 가드)
     return false;
   }
 

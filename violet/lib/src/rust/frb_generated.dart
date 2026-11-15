@@ -3,7 +3,10 @@
 
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
+import 'api/hangul.dart';
 import 'api/image_hash.dart';
+import 'api/index_sync.dart';
+import 'api/message_search.dart';
 import 'api/nozomi.dart';
 import 'api/simple.dart';
 import 'dart:async';
@@ -68,7 +71,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => -2000181277;
+  int get rustContentHash => 1107034958;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -79,6 +82,19 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 }
 
 abstract class RustLibApi extends BaseApi {
+  RestoredSearchToken crateApiHangulAnalyzeSearchToken({required String token});
+
+  Future<IndexSyncStats> crateApiIndexSyncApplyIndexDelta({
+    required String dataDir,
+    required String removedRowsJson,
+    required String addedRowsJson,
+  });
+
+  Future<BigInt> crateApiMessageSearchBuildFscmFile({
+    required String outputPath,
+    required List<FscmBuildEntry> entries,
+  });
+
   double crateApiImageHashCalculateDhashSimilarity({
     required BigInt h1,
     required BigInt h2,
@@ -91,6 +107,15 @@ abstract class RustLibApi extends BaseApi {
     required String dest,
   });
 
+  Future<List<String>> crateApiSimpleDecompress7ZFlat({
+    required String src,
+    required String destDir,
+  });
+
+  BigInt crateApiMessageSearchDeviceTotalRamMb();
+
+  String crateApiHangulDisassembleHangulLossless({required String input});
+
   String crateApiSimpleGreet({required String name});
 
   Future<void> crateApiSimpleInitApp();
@@ -99,7 +124,50 @@ abstract class RustLibApi extends BaseApi {
     required List<Uint32List> lists,
   });
 
+  Future<List<MobileMessageHit>> crateApiMessageSearchMobileSearchArticle({
+    required int articleId,
+    required String query,
+  });
+
+  bool crateApiMessageSearchMobileSearchCancel();
+
+  Future<BigInt> crateApiMessageSearchMobileSearchInit({
+    required List<String> paths,
+    required int budgetMb,
+    required int searchThreads,
+  });
+
+  MobileSearchProgress crateApiMessageSearchMobileSearchProgress();
+
+  Future<List<MobileMessageHit>> crateApiMessageSearchMobileSearchQuery({
+    required String query,
+    required bool containsMode,
+    required int take,
+    MobileSearchFilter? filter,
+  });
+
+  Future<MobileSearchResponse> crateApiMessageSearchMobileSearchQueryEx({
+    required String query,
+    required bool containsMode,
+    required int take,
+    MobileSearchFilter? filter,
+  });
+
+  int crateApiMessageSearchMobileSearchSetPopularIds({required List<int> ids});
+
+  bool crateApiMessageSearchMobileSearchUnload();
+
+  String crateApiHangulNormalizeSearchQueryTypos({required String query});
+
   Uint32List crateApiNozomiParseNozomiBytes({required List<int> bytes});
+
+  int crateApiMessageSearchRecommendedMobileBudgetMb();
+
+  String crateApiHangulRestoreHangulTypo({required String input});
+
+  Future<FscmFileInfo> crateApiMessageSearchVerifyFscmFile({
+    required String path,
+  });
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -109,6 +177,106 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required super.generalizedFrbRustBinding,
     required super.portManager,
   });
+
+  @override
+  RestoredSearchToken crateApiHangulAnalyzeSearchToken({
+    required String token,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(token, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 1)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_restored_search_token,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiHangulAnalyzeSearchTokenConstMeta,
+        argValues: [token],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiHangulAnalyzeSearchTokenConstMeta =>
+      const TaskConstMeta(
+        debugName: "analyze_search_token",
+        argNames: ["token"],
+      );
+
+  @override
+  Future<IndexSyncStats> crateApiIndexSyncApplyIndexDelta({
+    required String dataDir,
+    required String removedRowsJson,
+    required String addedRowsJson,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dataDir, serializer);
+          sse_encode_String(removedRowsJson, serializer);
+          sse_encode_String(addedRowsJson, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 2,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_index_sync_stats,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiIndexSyncApplyIndexDeltaConstMeta,
+        argValues: [dataDir, removedRowsJson, addedRowsJson],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiIndexSyncApplyIndexDeltaConstMeta =>
+      const TaskConstMeta(
+        debugName: "apply_index_delta",
+        argNames: ["dataDir", "removedRowsJson", "addedRowsJson"],
+      );
+
+  @override
+  Future<BigInt> crateApiMessageSearchBuildFscmFile({
+    required String outputPath,
+    required List<FscmBuildEntry> entries,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(outputPath, serializer);
+          sse_encode_list_fscm_build_entry(entries, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 3,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_64,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiMessageSearchBuildFscmFileConstMeta,
+        argValues: [outputPath, entries],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMessageSearchBuildFscmFileConstMeta =>
+      const TaskConstMeta(
+        debugName: "build_fscm_file",
+        argNames: ["outputPath", "entries"],
+      );
 
   @override
   double crateApiImageHashCalculateDhashSimilarity({
@@ -121,7 +289,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_u_64(h1, serializer);
           sse_encode_u_64(h2, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 1)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 4)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_f_64,
@@ -147,7 +315,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_list_prim_u_8_loose(bytes, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 2)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_opt_box_autoadd_u_64,
@@ -177,7 +345,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 3,
+            funcId: 6,
             port: port_,
           );
         },
@@ -198,13 +366,96 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
+  Future<List<String>> crateApiSimpleDecompress7ZFlat({
+    required String src,
+    required String destDir,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(src, serializer);
+          sse_encode_String(destDir, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 7,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiSimpleDecompress7ZFlatConstMeta,
+        argValues: [src, destDir],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleDecompress7ZFlatConstMeta =>
+      const TaskConstMeta(
+        debugName: "decompress_7z_flat",
+        argNames: ["src", "destDir"],
+      );
+
+  @override
+  BigInt crateApiMessageSearchDeviceTotalRamMb() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_64,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMessageSearchDeviceTotalRamMbConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMessageSearchDeviceTotalRamMbConstMeta =>
+      const TaskConstMeta(debugName: "device_total_ram_mb", argNames: []);
+
+  @override
+  String crateApiHangulDisassembleHangulLossless({required String input}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(input, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiHangulDisassembleHangulLosslessConstMeta,
+        argValues: [input],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiHangulDisassembleHangulLosslessConstMeta =>
+      const TaskConstMeta(
+        debugName: "disassemble_hangul_lossless",
+        argNames: ["input"],
+      );
+
+  @override
   String crateApiSimpleGreet({required String name}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(name, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 4)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 10)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -229,7 +480,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 5,
+            funcId: 11,
             port: port_,
           );
         },
@@ -256,7 +507,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_list_list_prim_u_32_strict(lists, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 12)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_prim_u_32_strict,
@@ -276,13 +527,281 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<List<MobileMessageHit>> crateApiMessageSearchMobileSearchArticle({
+    required int articleId,
+    required String query,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(articleId, serializer);
+          sse_encode_String(query, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 13,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_mobile_message_hit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiMessageSearchMobileSearchArticleConstMeta,
+        argValues: [articleId, query],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMessageSearchMobileSearchArticleConstMeta =>
+      const TaskConstMeta(
+        debugName: "mobile_search_article",
+        argNames: ["articleId", "query"],
+      );
+
+  @override
+  bool crateApiMessageSearchMobileSearchCancel() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 14)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMessageSearchMobileSearchCancelConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMessageSearchMobileSearchCancelConstMeta =>
+      const TaskConstMeta(debugName: "mobile_search_cancel", argNames: []);
+
+  @override
+  Future<BigInt> crateApiMessageSearchMobileSearchInit({
+    required List<String> paths,
+    required int budgetMb,
+    required int searchThreads,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_String(paths, serializer);
+          sse_encode_u_32(budgetMb, serializer);
+          sse_encode_u_32(searchThreads, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 15,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_64,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiMessageSearchMobileSearchInitConstMeta,
+        argValues: [paths, budgetMb, searchThreads],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMessageSearchMobileSearchInitConstMeta =>
+      const TaskConstMeta(
+        debugName: "mobile_search_init",
+        argNames: ["paths", "budgetMb", "searchThreads"],
+      );
+
+  @override
+  MobileSearchProgress crateApiMessageSearchMobileSearchProgress() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 16)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_mobile_search_progress,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMessageSearchMobileSearchProgressConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMessageSearchMobileSearchProgressConstMeta =>
+      const TaskConstMeta(debugName: "mobile_search_progress", argNames: []);
+
+  @override
+  Future<List<MobileMessageHit>> crateApiMessageSearchMobileSearchQuery({
+    required String query,
+    required bool containsMode,
+    required int take,
+    MobileSearchFilter? filter,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(query, serializer);
+          sse_encode_bool(containsMode, serializer);
+          sse_encode_u_32(take, serializer);
+          sse_encode_opt_box_autoadd_mobile_search_filter(filter, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 17,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_mobile_message_hit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiMessageSearchMobileSearchQueryConstMeta,
+        argValues: [query, containsMode, take, filter],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMessageSearchMobileSearchQueryConstMeta =>
+      const TaskConstMeta(
+        debugName: "mobile_search_query",
+        argNames: ["query", "containsMode", "take", "filter"],
+      );
+
+  @override
+  Future<MobileSearchResponse> crateApiMessageSearchMobileSearchQueryEx({
+    required String query,
+    required bool containsMode,
+    required int take,
+    MobileSearchFilter? filter,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(query, serializer);
+          sse_encode_bool(containsMode, serializer);
+          sse_encode_u_32(take, serializer);
+          sse_encode_opt_box_autoadd_mobile_search_filter(filter, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 18,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_mobile_search_response,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiMessageSearchMobileSearchQueryExConstMeta,
+        argValues: [query, containsMode, take, filter],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMessageSearchMobileSearchQueryExConstMeta =>
+      const TaskConstMeta(
+        debugName: "mobile_search_query_ex",
+        argNames: ["query", "containsMode", "take", "filter"],
+      );
+
+  @override
+  int crateApiMessageSearchMobileSearchSetPopularIds({required List<int> ids}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_prim_u_32_loose(ids, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 19)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_32,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMessageSearchMobileSearchSetPopularIdsConstMeta,
+        argValues: [ids],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMessageSearchMobileSearchSetPopularIdsConstMeta =>
+      const TaskConstMeta(
+        debugName: "mobile_search_set_popular_ids",
+        argNames: ["ids"],
+      );
+
+  @override
+  bool crateApiMessageSearchMobileSearchUnload() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 20)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMessageSearchMobileSearchUnloadConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMessageSearchMobileSearchUnloadConstMeta =>
+      const TaskConstMeta(debugName: "mobile_search_unload", argNames: []);
+
+  @override
+  String crateApiHangulNormalizeSearchQueryTypos({required String query}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(query, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 21)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiHangulNormalizeSearchQueryTyposConstMeta,
+        argValues: [query],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiHangulNormalizeSearchQueryTyposConstMeta =>
+      const TaskConstMeta(
+        debugName: "normalize_search_query_typos",
+        argNames: ["query"],
+      );
+
+  @override
   Uint32List crateApiNozomiParseNozomiBytes({required List<int> bytes}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_list_prim_u_8_loose(bytes, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 22)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_prim_u_32_strict,
@@ -298,10 +817,109 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiNozomiParseNozomiBytesConstMeta =>
       const TaskConstMeta(debugName: "parse_nozomi_bytes", argNames: ["bytes"]);
 
+  @override
+  int crateApiMessageSearchRecommendedMobileBudgetMb() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 23)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_32,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMessageSearchRecommendedMobileBudgetMbConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMessageSearchRecommendedMobileBudgetMbConstMeta =>
+      const TaskConstMeta(
+        debugName: "recommended_mobile_budget_mb",
+        argNames: [],
+      );
+
+  @override
+  String crateApiHangulRestoreHangulTypo({required String input}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(input, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 24)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiHangulRestoreHangulTypoConstMeta,
+        argValues: [input],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiHangulRestoreHangulTypoConstMeta =>
+      const TaskConstMeta(
+        debugName: "restore_hangul_typo",
+        argNames: ["input"],
+      );
+
+  @override
+  Future<FscmFileInfo> crateApiMessageSearchVerifyFscmFile({
+    required String path,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(path, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 25,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_fscm_file_info,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiMessageSearchVerifyFscmFileConstMeta,
+        argValues: [path],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMessageSearchVerifyFscmFileConstMeta =>
+      const TaskConstMeta(debugName: "verify_fscm_file", argNames: ["path"]);
+
   @protected
   String dco_decode_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as String;
+  }
+
+  @protected
+  bool dco_decode_bool(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as bool;
+  }
+
+  @protected
+  MobileSearchFilter dco_decode_box_autoadd_mobile_search_filter(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_mobile_search_filter(raw);
+  }
+
+  @protected
+  int dco_decode_box_autoadd_u_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
   }
 
   @protected
@@ -311,9 +929,72 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  double dco_decode_f_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as double;
+  }
+
+  @protected
   double dco_decode_f_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as double;
+  }
+
+  @protected
+  FscmBuildEntry dco_decode_fscm_build_entry(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return FscmBuildEntry(
+      articleId: dco_decode_u_32(arr[0]),
+      page: dco_decode_u_32(arr[1]),
+      text: dco_decode_String(arr[2]),
+      storeRaw: dco_decode_bool(arr[3]),
+      correctness: dco_decode_f_32(arr[4]),
+      rect: dco_decode_list_prim_f_32_strict(arr[5]),
+    );
+  }
+
+  @protected
+  FscmFileInfo dco_decode_fscm_file_info(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return FscmFileInfo(
+      path: dco_decode_String(arr[0]),
+      recordCount: dco_decode_u_64(arr[1]),
+      textBytes: dco_decode_u_64(arr[2]),
+      hasRawFlag: dco_decode_bool(arr[3]),
+      maxArticleId: dco_decode_u_32(arr[4]),
+    );
+  }
+
+  @protected
+  IndexSyncStats dco_decode_index_sync_stats(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return IndexSyncStats(
+      addedOrUpdated: dco_decode_u_32(arr[0]),
+      removed: dco_decode_u_32(arr[1]),
+      totalUniqueTags: dco_decode_u_32(arr[2]),
+      elapsedMs: dco_decode_u_64(arr[3]),
+    );
+  }
+
+  @protected
+  List<String> dco_decode_list_String(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_String).toList();
+  }
+
+  @protected
+  List<FscmBuildEntry> dco_decode_list_fscm_build_entry(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_fscm_build_entry).toList();
   }
 
   @protected
@@ -322,6 +1003,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return (raw as List<dynamic>)
         .map(dco_decode_list_prim_u_32_strict)
         .toList();
+  }
+
+  @protected
+  List<MobileMessageHit> dco_decode_list_mobile_message_hit(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_mobile_message_hit).toList();
+  }
+
+  @protected
+  Float32List dco_decode_list_prim_f_32_strict(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as Float32List;
+  }
+
+  @protected
+  List<int> dco_decode_list_prim_u_32_loose(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as List<int>;
   }
 
   @protected
@@ -343,9 +1042,114 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  MobileMessageHit dco_decode_mobile_message_hit(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return MobileMessageHit(
+      articleId: dco_decode_u_32(arr[0]),
+      page: dco_decode_u_32(arr[1]),
+      matchScore: dco_decode_f_64(arr[2]),
+      correctness: dco_decode_f_32(arr[3]),
+      rect: dco_decode_list_prim_f_32_strict(arr[4]),
+      rawText: dco_decode_String(arr[5]),
+    );
+  }
+
+  @protected
+  MobileSearchFilter dco_decode_mobile_search_filter(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return MobileSearchFilter(
+      articleId: dco_decode_opt_box_autoadd_u_32(arr[0]),
+      idMin: dco_decode_opt_box_autoadd_u_32(arr[1]),
+      idMax: dco_decode_opt_box_autoadd_u_32(arr[2]),
+      whitelistIds: dco_decode_opt_list_prim_u_32_strict(arr[3]),
+      sortMode: dco_decode_opt_box_autoadd_u_32(arr[4]),
+    );
+  }
+
+  @protected
+  MobileSearchProgress dco_decode_mobile_search_progress(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    return MobileSearchProgress(
+      initialized: dco_decode_bool(arr[0]),
+      active: dco_decode_bool(arr[1]),
+      cancelled: dco_decode_bool(arr[2]),
+      scannedRecords: dco_decode_u_64(arr[3]),
+      plannedRecords: dco_decode_u_64(arr[4]),
+      totalRecords: dco_decode_u_64(arr[5]),
+      memoryBudgetMb: dco_decode_u_32(arr[6]),
+      maxArticleId: dco_decode_u_32(arr[7]),
+    );
+  }
+
+  @protected
+  MobileSearchResponse dco_decode_mobile_search_response(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return MobileSearchResponse(
+      totalMatched: dco_decode_u_64(arr[0]),
+      hits: dco_decode_list_mobile_message_hit(arr[1]),
+    );
+  }
+
+  @protected
+  String? dco_decode_opt_String(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_String(raw);
+  }
+
+  @protected
+  MobileSearchFilter? dco_decode_opt_box_autoadd_mobile_search_filter(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_mobile_search_filter(raw);
+  }
+
+  @protected
+  int? dco_decode_opt_box_autoadd_u_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_u_32(raw);
+  }
+
+  @protected
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_u_64(raw);
+  }
+
+  @protected
+  Uint32List? dco_decode_opt_list_prim_u_32_strict(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_list_prim_u_32_strict(raw);
+  }
+
+  @protected
+  RestoredSearchToken dco_decode_restored_search_token(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return RestoredSearchToken(
+      original: dco_decode_String(arr[0]),
+      normalizedPrefix: dco_decode_opt_String(arr[1]),
+      rawValue: dco_decode_String(arr[2]),
+      restoredHangul: dco_decode_opt_String(arr[3]),
+      disassembledKey: dco_decode_String(arr[4]),
+      restoredExpression: dco_decode_opt_String(arr[5]),
+    );
   }
 
   @protected
@@ -380,15 +1184,118 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  bool sse_decode_bool(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getUint8() != 0;
+  }
+
+  @protected
+  MobileSearchFilter sse_decode_box_autoadd_mobile_search_filter(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_mobile_search_filter(deserializer));
+  }
+
+  @protected
+  int sse_decode_box_autoadd_u_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_u_32(deserializer));
+  }
+
+  @protected
   BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_u_64(deserializer));
   }
 
   @protected
+  double sse_decode_f_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getFloat32();
+  }
+
+  @protected
   double sse_decode_f_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getFloat64();
+  }
+
+  @protected
+  FscmBuildEntry sse_decode_fscm_build_entry(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_articleId = sse_decode_u_32(deserializer);
+    var var_page = sse_decode_u_32(deserializer);
+    var var_text = sse_decode_String(deserializer);
+    var var_storeRaw = sse_decode_bool(deserializer);
+    var var_correctness = sse_decode_f_32(deserializer);
+    var var_rect = sse_decode_list_prim_f_32_strict(deserializer);
+    return FscmBuildEntry(
+      articleId: var_articleId,
+      page: var_page,
+      text: var_text,
+      storeRaw: var_storeRaw,
+      correctness: var_correctness,
+      rect: var_rect,
+    );
+  }
+
+  @protected
+  FscmFileInfo sse_decode_fscm_file_info(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_path = sse_decode_String(deserializer);
+    var var_recordCount = sse_decode_u_64(deserializer);
+    var var_textBytes = sse_decode_u_64(deserializer);
+    var var_hasRawFlag = sse_decode_bool(deserializer);
+    var var_maxArticleId = sse_decode_u_32(deserializer);
+    return FscmFileInfo(
+      path: var_path,
+      recordCount: var_recordCount,
+      textBytes: var_textBytes,
+      hasRawFlag: var_hasRawFlag,
+      maxArticleId: var_maxArticleId,
+    );
+  }
+
+  @protected
+  IndexSyncStats sse_decode_index_sync_stats(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_addedOrUpdated = sse_decode_u_32(deserializer);
+    var var_removed = sse_decode_u_32(deserializer);
+    var var_totalUniqueTags = sse_decode_u_32(deserializer);
+    var var_elapsedMs = sse_decode_u_64(deserializer);
+    return IndexSyncStats(
+      addedOrUpdated: var_addedOrUpdated,
+      removed: var_removed,
+      totalUniqueTags: var_totalUniqueTags,
+      elapsedMs: var_elapsedMs,
+    );
+  }
+
+  @protected
+  List<String> sse_decode_list_String(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <String>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_String(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<FscmBuildEntry> sse_decode_list_fscm_build_entry(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <FscmBuildEntry>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_fscm_build_entry(deserializer));
+    }
+    return ans_;
   }
 
   @protected
@@ -403,6 +1310,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ans_.add(sse_decode_list_prim_u_32_strict(deserializer));
     }
     return ans_;
+  }
+
+  @protected
+  List<MobileMessageHit> sse_decode_list_mobile_message_hit(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <MobileMessageHit>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_mobile_message_hit(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  Float32List sse_decode_list_prim_f_32_strict(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var len_ = sse_decode_i_32(deserializer);
+    return deserializer.buffer.getFloat32List(len_);
+  }
+
+  @protected
+  List<int> sse_decode_list_prim_u_32_loose(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var len_ = sse_decode_i_32(deserializer);
+    return deserializer.buffer.getUint32List(len_);
   }
 
   @protected
@@ -427,6 +1362,114 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  MobileMessageHit sse_decode_mobile_message_hit(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_articleId = sse_decode_u_32(deserializer);
+    var var_page = sse_decode_u_32(deserializer);
+    var var_matchScore = sse_decode_f_64(deserializer);
+    var var_correctness = sse_decode_f_32(deserializer);
+    var var_rect = sse_decode_list_prim_f_32_strict(deserializer);
+    var var_rawText = sse_decode_String(deserializer);
+    return MobileMessageHit(
+      articleId: var_articleId,
+      page: var_page,
+      matchScore: var_matchScore,
+      correctness: var_correctness,
+      rect: var_rect,
+      rawText: var_rawText,
+    );
+  }
+
+  @protected
+  MobileSearchFilter sse_decode_mobile_search_filter(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_articleId = sse_decode_opt_box_autoadd_u_32(deserializer);
+    var var_idMin = sse_decode_opt_box_autoadd_u_32(deserializer);
+    var var_idMax = sse_decode_opt_box_autoadd_u_32(deserializer);
+    var var_whitelistIds = sse_decode_opt_list_prim_u_32_strict(deserializer);
+    var var_sortMode = sse_decode_opt_box_autoadd_u_32(deserializer);
+    return MobileSearchFilter(
+      articleId: var_articleId,
+      idMin: var_idMin,
+      idMax: var_idMax,
+      whitelistIds: var_whitelistIds,
+      sortMode: var_sortMode,
+    );
+  }
+
+  @protected
+  MobileSearchProgress sse_decode_mobile_search_progress(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_initialized = sse_decode_bool(deserializer);
+    var var_active = sse_decode_bool(deserializer);
+    var var_cancelled = sse_decode_bool(deserializer);
+    var var_scannedRecords = sse_decode_u_64(deserializer);
+    var var_plannedRecords = sse_decode_u_64(deserializer);
+    var var_totalRecords = sse_decode_u_64(deserializer);
+    var var_memoryBudgetMb = sse_decode_u_32(deserializer);
+    var var_maxArticleId = sse_decode_u_32(deserializer);
+    return MobileSearchProgress(
+      initialized: var_initialized,
+      active: var_active,
+      cancelled: var_cancelled,
+      scannedRecords: var_scannedRecords,
+      plannedRecords: var_plannedRecords,
+      totalRecords: var_totalRecords,
+      memoryBudgetMb: var_memoryBudgetMb,
+      maxArticleId: var_maxArticleId,
+    );
+  }
+
+  @protected
+  MobileSearchResponse sse_decode_mobile_search_response(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_totalMatched = sse_decode_u_64(deserializer);
+    var var_hits = sse_decode_list_mobile_message_hit(deserializer);
+    return MobileSearchResponse(totalMatched: var_totalMatched, hits: var_hits);
+  }
+
+  @protected
+  String? sse_decode_opt_String(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_String(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  MobileSearchFilter? sse_decode_opt_box_autoadd_mobile_search_filter(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_mobile_search_filter(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_u_32(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -435,6 +1478,40 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     } else {
       return null;
     }
+  }
+
+  @protected
+  Uint32List? sse_decode_opt_list_prim_u_32_strict(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_list_prim_u_32_strict(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  RestoredSearchToken sse_decode_restored_search_token(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_original = sse_decode_String(deserializer);
+    var var_normalizedPrefix = sse_decode_opt_String(deserializer);
+    var var_rawValue = sse_decode_String(deserializer);
+    var var_restoredHangul = sse_decode_opt_String(deserializer);
+    var var_disassembledKey = sse_decode_String(deserializer);
+    var var_restoredExpression = sse_decode_opt_String(deserializer);
+    return RestoredSearchToken(
+      original: var_original,
+      normalizedPrefix: var_normalizedPrefix,
+      rawValue: var_rawValue,
+      restoredHangul: var_restoredHangul,
+      disassembledKey: var_disassembledKey,
+      restoredExpression: var_restoredExpression,
+    );
   }
 
   @protected
@@ -467,15 +1544,30 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  bool sse_decode_bool(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getUint8() != 0;
-  }
-
-  @protected
   void sse_encode_String(String self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_list_prim_u_8_strict(utf8.encoder.convert(self), serializer);
+  }
+
+  @protected
+  void sse_encode_bool(bool self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putUint8(self ? 1 : 0);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_mobile_search_filter(
+    MobileSearchFilter self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_mobile_search_filter(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self, serializer);
   }
 
   @protected
@@ -485,9 +1577,72 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_f_32(double self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putFloat32(self);
+  }
+
+  @protected
   void sse_encode_f_64(double self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putFloat64(self);
+  }
+
+  @protected
+  void sse_encode_fscm_build_entry(
+    FscmBuildEntry self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.articleId, serializer);
+    sse_encode_u_32(self.page, serializer);
+    sse_encode_String(self.text, serializer);
+    sse_encode_bool(self.storeRaw, serializer);
+    sse_encode_f_32(self.correctness, serializer);
+    sse_encode_list_prim_f_32_strict(self.rect, serializer);
+  }
+
+  @protected
+  void sse_encode_fscm_file_info(FscmFileInfo self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.path, serializer);
+    sse_encode_u_64(self.recordCount, serializer);
+    sse_encode_u_64(self.textBytes, serializer);
+    sse_encode_bool(self.hasRawFlag, serializer);
+    sse_encode_u_32(self.maxArticleId, serializer);
+  }
+
+  @protected
+  void sse_encode_index_sync_stats(
+    IndexSyncStats self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.addedOrUpdated, serializer);
+    sse_encode_u_32(self.removed, serializer);
+    sse_encode_u_32(self.totalUniqueTags, serializer);
+    sse_encode_u_64(self.elapsedMs, serializer);
+  }
+
+  @protected
+  void sse_encode_list_String(List<String> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_String(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_fscm_build_entry(
+    List<FscmBuildEntry> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_fscm_build_entry(item, serializer);
+    }
   }
 
   @protected
@@ -500,6 +1655,40 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     for (final item in self) {
       sse_encode_list_prim_u_32_strict(item, serializer);
     }
+  }
+
+  @protected
+  void sse_encode_list_mobile_message_hit(
+    List<MobileMessageHit> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_mobile_message_hit(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_prim_f_32_strict(
+    Float32List self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    serializer.buffer.putFloat32List(self);
+  }
+
+  @protected
+  void sse_encode_list_prim_u_32_loose(
+    List<int> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    serializer.buffer.putUint32List(
+      self is Uint32List ? self : Uint32List.fromList(self),
+    );
   }
 
   @protected
@@ -535,6 +1724,92 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_mobile_message_hit(
+    MobileMessageHit self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.articleId, serializer);
+    sse_encode_u_32(self.page, serializer);
+    sse_encode_f_64(self.matchScore, serializer);
+    sse_encode_f_32(self.correctness, serializer);
+    sse_encode_list_prim_f_32_strict(self.rect, serializer);
+    sse_encode_String(self.rawText, serializer);
+  }
+
+  @protected
+  void sse_encode_mobile_search_filter(
+    MobileSearchFilter self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_opt_box_autoadd_u_32(self.articleId, serializer);
+    sse_encode_opt_box_autoadd_u_32(self.idMin, serializer);
+    sse_encode_opt_box_autoadd_u_32(self.idMax, serializer);
+    sse_encode_opt_list_prim_u_32_strict(self.whitelistIds, serializer);
+    sse_encode_opt_box_autoadd_u_32(self.sortMode, serializer);
+  }
+
+  @protected
+  void sse_encode_mobile_search_progress(
+    MobileSearchProgress self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bool(self.initialized, serializer);
+    sse_encode_bool(self.active, serializer);
+    sse_encode_bool(self.cancelled, serializer);
+    sse_encode_u_64(self.scannedRecords, serializer);
+    sse_encode_u_64(self.plannedRecords, serializer);
+    sse_encode_u_64(self.totalRecords, serializer);
+    sse_encode_u_32(self.memoryBudgetMb, serializer);
+    sse_encode_u_32(self.maxArticleId, serializer);
+  }
+
+  @protected
+  void sse_encode_mobile_search_response(
+    MobileSearchResponse self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.totalMatched, serializer);
+    sse_encode_list_mobile_message_hit(self.hits, serializer);
+  }
+
+  @protected
+  void sse_encode_opt_String(String? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_String(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_mobile_search_filter(
+    MobileSearchFilter? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_mobile_search_filter(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_u_32(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -542,6 +1817,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     if (self != null) {
       sse_encode_box_autoadd_u_64(self, serializer);
     }
+  }
+
+  @protected
+  void sse_encode_opt_list_prim_u_32_strict(
+    Uint32List? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_list_prim_u_32_strict(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_restored_search_token(
+    RestoredSearchToken self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.original, serializer);
+    sse_encode_opt_String(self.normalizedPrefix, serializer);
+    sse_encode_String(self.rawValue, serializer);
+    sse_encode_opt_String(self.restoredHangul, serializer);
+    sse_encode_String(self.disassembledKey, serializer);
+    sse_encode_opt_String(self.restoredExpression, serializer);
   }
 
   @protected
@@ -571,11 +1873,5 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_i_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putInt32(self);
-  }
-
-  @protected
-  void sse_encode_bool(bool self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putUint8(self ? 1 : 0);
   }
 }

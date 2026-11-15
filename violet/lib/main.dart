@@ -30,6 +30,8 @@ import 'package:violet/pages/after_loading/afterloading_page.dart';
 import 'package:violet/pages/database_download/database_download_page.dart';
 import 'package:violet/pages/lock/lock_screen.dart';
 import 'package:violet/pages/splash/splash_page.dart';
+import 'package:violet/component/app_cache_manager.dart';
+import 'package:violet/component/hitomi/message_corpus_manager.dart';
 import 'package:violet/settings/settings.dart';
 import 'package:violet/src/rust/frb_generated.dart';
 import 'package:violet/style/palette.dart';
@@ -63,6 +65,8 @@ Future<void> main() async {
         await initFirebase();
       }
       await Settings.initFirst();
+      unawaited(AppCacheManager.enforceBudget());
+      unawaited(MessageCorpusManager.instance.initIfEnabled());
       await warmupFlare();
 
       await syncThemeWithSystemAtLaunch();

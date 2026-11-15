@@ -57,3 +57,38 @@ pub fn to_parent_entry_extract_fn(
 
     Ok(true)
 }
+
+/// 아카이브 내부 경로 구조와 무관하게 파일명만 추출하여 `dest_dir` 직하위에 안전하게 풀어냅니다.
+pub fn extract_7z_flat_to_dir(src: &str, dest_dir: &str) -> Result<Vec<String>, String> {
+    let out_dir = PathBuf::from(dest_dir);
+    if !out_dir.exists() {
+        std::fs::create_dir_all(&out_dir)
+            .map_err(|e| format!("Failed to create destination dir '{dest_dir}': {e}"))?;
+    }
+
+    let mut extracted_files = Vec::new();
+    let target_dir = out_dir.clone();
+
+    sevenz_rust::decompress_file_with_extract_fn(src, &out_dir, |entry, reader, _dest| {
+        if entry.is_directory() {
+            return Ok(true);
+        }
+        let raw_name = PathBuf::from(entry.name());
+        let file_name = match raw_name.file_name() {
+            Some(name) => name,
+            None => return Err(Error::other("Invalid 7z entry file name")),
+        };
+        let to_path = target_dir.join(file_name);
+        let file = File::create(&to_path)
+            .map_err(|e| Error::Io(e, to_path.to_string_lossy().to_string().into()))?;
+        if entry.size() > 0 {
+            let mut writer = BufWriter::with_capacity(256 * 1024, file);
+            copy(reader, &mut writer).map_err(Error::io)?;
+        }
+        extracted_files.push(to_path.to_string_lossy().to_string());
+        Ok(true)
+    })
+    .map_err(|e| format!("7z extraction failed: {e}"))?;
+
+    Ok(extracted_files)
+}

@@ -111,12 +111,23 @@ class ActLogger {
 
     if (!await logFile.exists()) {
       await logFile.create();
+    } else {
+      final len = await logFile.length();
+      if (len > 2 * 1024 * 1024) {
+        try {
+          final raf = await logFile.open(mode: FileMode.read);
+          await raf.setPosition(len - 512 * 1024);
+          final tailBytes = await raf.read(512 * 1024);
+          await raf.close();
+          await logFile.writeAsBytes(tailBytes, mode: FileMode.write);
+        } catch (_) {}
+      }
     }
 
     session = sha1.convert(utf8.encode(DateTime.now().toString())).toString();
     await log(ActLogEvent(type: ActLogType.appStart));
 
-    signalTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+    signalTimer = Timer.periodic(const Duration(seconds: 60), (timer) {
       log(ActLogEvent(type: ActLogType.signal));
     });
   }
@@ -127,6 +138,9 @@ class ActLogger {
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
       await lock.synchronized(() async {
         events.add(msg);
+        if (events.length > 2000) {
+          events.removeRange(0, events.length - 1000);
+        }
         await logFile.writeAsString(
           '$session ${msg.toJson()}\n',
           mode: FileMode.append,

@@ -4,9 +4,11 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:html_unescape/html_unescape_small.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:provider/provider.dart';
+import 'package:violet/component/hangul_auto_restorer.dart';
 import 'package:violet/component/hitomi/tag_translate.dart';
 import 'package:violet/component/index.dart';
 import 'package:violet/database/query.dart';
@@ -28,6 +30,8 @@ class _FilterPageState extends State<FilterPage> {
   late FilterController c;
 
   final _searchController = TextEditingController();
+  final _minPageController = TextEditingController();
+  final _maxPageController = TextEditingController();
 
   bool test = false;
 
@@ -108,8 +112,19 @@ class _FilterPageState extends State<FilterPage> {
     if (!_initOnce) {
       _initOnce = true;
       c = Provider.of<FilterController>(context, listen: false);
+      _minPageController.text = c.minPages?.toString() ?? '';
+      _maxPageController.text = c.maxPages?.toString() ?? '';
+      _searchController.text = c.localQuery;
       _initTagPad();
     }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _minPageController.dispose();
+    _maxPageController.dispose();
+    super.dispose();
   }
 
   @override
@@ -122,6 +137,7 @@ class _FilterPageState extends State<FilterPage> {
         padding: const EdgeInsets.all(4),
         child: Column(
           children: <Widget>[
+            _buildPageCountFilterPanel(),
             Expanded(
               child: ListView(
                 padding: EdgeInsets.zero,
@@ -136,6 +152,125 @@ class _FilterPageState extends State<FilterPage> {
             _buildOptionButtons(),
           ],
         ),
+      ),
+    );
+  }
+
+  void _applyPresetPages(int? minP, int? maxP) {
+    setState(() {
+      if (c.minPages == minP && c.maxPages == maxP) {
+        c.minPages = null;
+        c.maxPages = null;
+      } else {
+        c.minPages = minP;
+        c.maxPages = maxP;
+      }
+      _minPageController.text = c.minPages?.toString() ?? '';
+      _maxPageController.text = c.maxPages?.toString() ?? '';
+    });
+  }
+
+  Widget _buildPageCountFilterPanel() {
+    final isDark = Settings.themeWhat.value;
+    final accent = Settings.majorColor.value;
+    const presets = <(String, int?, int?)>[
+      ('단편 ≤30p', null, 30),
+      ('중편 31~80p', 31, 80),
+      ('장편 80p+', 80, null),
+      ('초장편 150p+', 150, null),
+    ];
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(6, 4, 6, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withOpacity(0.05)
+            : Colors.black.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(MdiIcons.bookOpenPageVariantOutline, size: 17, color: accent),
+              const SizedBox(width: 6),
+              const Text(
+                '페이지 수 필터',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+              const Spacer(),
+              if (c.minPages != null || c.maxPages != null)
+                InkWell(
+                  onTap: () => _applyPresetPages(null, null),
+                  child: Text('초기화', style: TextStyle(fontSize: 12, color: accent)),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 34,
+                  child: TextField(
+                    controller: _minPageController,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    style: const TextStyle(fontSize: 13),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      hintText: '최소 p',
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+                    ),
+                    onChanged: (v) => setState(() => c.minPages = int.tryParse(v.trim())),
+                  ),
+                ),
+              ),
+              const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: Text('~')),
+              Expanded(
+                child: SizedBox(
+                  height: 34,
+                  child: TextField(
+                    controller: _maxPageController,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    style: const TextStyle(fontSize: 13),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      hintText: '최대 p',
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+                    ),
+                    onChanged: (v) => setState(() => c.maxPages = int.tryParse(v.trim())),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: presets.map((p) {
+                final selected = c.minPages == p.$2 && c.maxPages == p.$3;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ChoiceChip(
+                    label: Text(p.$1, style: const TextStyle(fontSize: 11.5)),
+                    selected: selected,
+                    selectedColor: accent.withOpacity(0.25),
+                    visualDensity: VisualDensity.compact,
+                    onSelected: (_) => _applyPresetPages(p.$2, p.$3),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -240,7 +375,11 @@ class _FilterPageState extends State<FilterPage> {
         .toList();
 
     if (c.isSearch) {
-      final q = _searchController.text.trim().toLowerCase().replaceAll('_', ' ');
+      final rawQ = _searchController.text.trim();
+      final q = rawQ.toLowerCase().replaceAll('_', ' ');
+      final restoredQ = Settings.enableHangulTypoRestore.value
+          ? HangulAutoRestorer.tryRestoreKoreanWord(rawQ)?.toLowerCase()
+          : null;
       final matchedInFolder = _tags
           .where((element) {
             if (c.tagStates['${element.$1}|${element.$2}'] ?? false) return false;
@@ -251,7 +390,9 @@ class _FilterPageState extends State<FilterPage> {
             if (fullName.contains(q) || rawName.contains(q)) return true;
 
             final translated = TagTranslate.ofAny(element.$2).toLowerCase().replaceAll('_', ' ');
-            return translated.contains(q);
+            if (translated.contains(q)) return true;
+            if (restoredQ != null && translated.contains(restoredQ)) return true;
+            return false;
           })
           .toList();
       tags += matchedInFolder;
@@ -259,7 +400,7 @@ class _FilterPageState extends State<FilterPage> {
       // 폴더 내 태그가 없거나 부족할 때도 글로벌 태그 사전 및 인덱스에서 일치하는 태그/작가/그룹을 찾아 검색 결과 칩으로 제공
       if (q.isNotEmpty) {
         final existingKeys = tags.map((e) => '${e.$1}|${e.$2}').toSet();
-        final globalMatches = TagTranslate.contains(q);
+        final globalMatches = TagTranslate.containsTotal(rawQ);
         for (final tag in globalMatches) {
           if (tags.length >= 100) break;
           final group = tag.group ?? 'tag';
@@ -354,7 +495,7 @@ class _FilterPageState extends State<FilterPage> {
     return TextFormField(
       cursorColor: Colors.black,
       onChanged: (String str) async {
-        // await searchProcess(str, _searchController.selection);
+        c.localQuery = str;
         setState(() {});
       },
       controller: _searchController,
@@ -367,11 +508,12 @@ class _FilterPageState extends State<FilterPage> {
         suffixIcon: IconButton(
           onPressed: () async {
             _searchController.clear();
+            c.localQuery = '';
             _searchController.selection = const TextSelection(
               baseOffset: 0,
               extentOffset: 0,
             );
-            // await searchProcess('', _searchController.selection);
+            setState(() {});
           },
           icon: const Icon(Icons.clear),
         ),
@@ -381,7 +523,7 @@ class _FilterPageState extends State<FilterPage> {
           top: 11,
           right: 15,
         ),
-        hintText: trans.Translations.instance!.trans('search'),
+        hintText: '${trans.Translations.instance!.trans('search')} (예: page>100, artist:이름)',
       ),
     );
   }

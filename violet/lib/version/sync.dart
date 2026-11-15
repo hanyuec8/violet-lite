@@ -8,10 +8,9 @@ import 'dart:math';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:http/http.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:sqflite/sqflite.dart';
 import 'package:violet/component/query_translate.dart';
 import 'package:violet/database/database.dart';
-import 'package:violet/database/query.dart';
+import 'package:violet/database/incremental_index_sync.dart';
 import 'package:violet/log/log.dart';
 import 'package:violet/network/wrapper.dart' as http;
 import 'package:violet/settings/settings.dart';
@@ -198,66 +197,63 @@ class SyncManager {
     }
     var jsons = res.map((e) => utf8.decode(e.bodyBytes)).toList();
 
-    // Update Database
+    // Update Database & Indexes Incrementally (Single WAL Transaction + FTS5 + Rust Tag Delta)
     try {
+      final lang = translateToLanguage(Settings.databaseType.value);
+      final chronologicalRecords = <Map<String, dynamic>>[];
+      int? newestTimestamp;
+
       for (int i = 0; i < filteredIter.length; i++) {
-        // Larger timestamp, the more recent data is contained.
-        // So, we need to update them in old order.
-        var row = filteredIter[filteredIter.length - i - 1];
+        // Larger timestamp = more recent data -> iterate oldest to newest
+        final idx = filteredIter.length - i - 1;
+        final row = filteredIter[idx];
         if (row.type != 'chunk') continue;
 
-        // First, parse json
-        var json = jsonDecode(jsons[filteredIter.length - i - 1]);
-
-        // Second, convert json to query
-        var qlist = json as List<dynamic>;
-        var quries = qlist
-            .map((e) => QueryResult(result: e as Map<String, dynamic>))
-            .toList();
-
-        // Third, filtering records with language
-        var lang = translateToLanguage(Settings.databaseType.value);
-        if (lang != '') {
-          quries = quries.where((element) {
-            var ll = element.language() as String;
-            return (ll == lang) || (ll == 'n/a');
-          }).toList();
-        }
-
-        // Last, append datas
-        var db = await DataBaseManager.getInstance();
-        // TODO: transcaction 내부로 숨기기
-        var dbraw = db.db!;
-        await dbraw.transaction((txn) async {
-          final batch = txn.batch();
-          for (var query in quries) {
-            batch.insert(
-              'HitomiColumnModel',
-              query.result,
-              conflictAlgorithm: ConflictAlgorithm.replace,
-            );
+        final decoded = jsonDecode(jsons[idx]) as List<dynamic>;
+        for (final item in decoded) {
+          final map = Map<String, dynamic>.from(item as Map);
+          if (lang.isNotEmpty) {
+            final ll = (map['Language'] ?? 'n/a').toString();
+            if (ll != lang && ll != 'n/a') continue;
           }
-          await batch.commit();
-        });
-
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setInt('synclatest', row.timestamp);
+          chronologicalRecords.add(map);
+        }
+        newestTimestamp = row.timestamp;
       }
 
+      String? deleteNotMatchingWhere;
       if (Settings.useOptimizeDatabase.value && filteredIter.isNotEmpty) {
         final sql = translate2query(
           '${Settings.includeTags.value} ${Settings.serializedExcludeTags}',
           filter: false,
         );
-
         final whereIdx = sql.indexOf('WHERE');
         if (whereIdx != -1) {
-          await (await DataBaseManager.getInstance()).delete(
-            'HitomiColumnModel',
-            'NOT (${sql.substring(whereIdx + 6)})',
-            [],
-          );
+          deleteNotMatchingWhere = 'NOT (${sql.substring(whereIdx + 6)})';
         }
+      }
+
+      if (chronologicalRecords.isNotEmpty || deleteNotMatchingWhere != null) {
+        final db = await DataBaseManager.getInstance();
+        await db.checkOpen();
+        final syncStats =
+            await IncrementalIndexSyncService.applyChunksIncrementally(
+          db.db!,
+          chronologicalRecords,
+          chunkCount: filteredIter.length,
+          deleteWhereClause: deleteNotMatchingWhere,
+        );
+        Logger.info(
+          '[Sync-chunk] Incremental sync complete: chunks=${syncStats.downloadedChunks}, '
+          'upserted=${syncStats.upsertedRows}, deleted=${syncStats.deletedRows}, '
+          'fts=${syncStats.ftsUpdated}, tagIdx=${syncStats.tagIndexUpdated}, '
+          '${syncStats.elapsedMs}ms',
+        );
+      }
+
+      if (newestTimestamp != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt('synclatest', newestTimestamp);
       }
     } catch (e, st) {
       // If an error occurs, stops synchronization immediately.

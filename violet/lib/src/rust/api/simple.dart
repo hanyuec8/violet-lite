@@ -11,3 +11,12 @@ String greet({required String name}) =>
 
 Future<void> decompress7Z({required String src, required String dest}) =>
     RustLib.instance.api.crateApiSimpleDecompress7Z(src: src, dest: dest);
+
+/// 단일 .7z 아카이브(예: merged-ko.fscm.7z)를 지정 폴더에 평탄화 추출하고 추출된 파일 경로 목록을 반환합니다.
+Future<List<String>> decompress7ZFlat({
+  required String src,
+  required String destDir,
+}) => RustLib.instance.api.crateApiSimpleDecompress7ZFlat(
+  src: src,
+  destDir: destDir,
+);

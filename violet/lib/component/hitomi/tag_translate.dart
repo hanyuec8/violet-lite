@@ -8,6 +8,7 @@ import 'dart:isolate';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart';
 import 'package:violet/algorithm/distance.dart';
+import 'package:violet/component/hangul_auto_restorer.dart';
 import 'package:violet/component/hitomi/displayed_tag.dart';
 import 'package:violet/component/hitomi/tag_translated_regacy.dart';
 
@@ -169,7 +170,10 @@ class TagTranslate {
 
   // [<Origin, Translated>]
   static List<DisplayedTag> containsTotal(String part) {
-    var result = contains(part) + containsAndro(part);
+    final restored = HangulAutoRestorer.tryRestoreKoreanWord(part);
+    var result = contains(part) +
+        (restored != null ? contains(restored) : <DisplayedTag>[]) +
+        containsAndro(part);
     var overlap = <String>{};
     var rresult = <DisplayedTag>[];
     for (var element in result) {

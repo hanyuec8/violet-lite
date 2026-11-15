@@ -8,3 +8,8 @@
 
 /translation_lab/
 
+.aider*
+*.db
+/testimage/
+**/__pycache__/
+logo_transparent.png

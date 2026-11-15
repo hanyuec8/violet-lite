@@ -51,7 +51,7 @@ extension SearchSortModeExtension on SearchSortMode {
   }
 }
 
-/// Pupil 애플리케이션의 핵심 로딩 메커니즘을 차용한 Hitomi Nozomi Range Request Fetcher.
+/// Hitomi Nozomi Range Request Fetcher.
 /// Hitomi.la의 `.nozomi` 바이너리 인덱스 파일에서 4바이트 Big-Endian 정수(갤러리 ID)를
 /// HTTP Range Header (bytes=start-end)를 이용해 100바이트 단위로 실시간 비동기 로딩합니다.
 class HitomiNozomi {

@@ -14,6 +14,9 @@ import 'package:violet/model/article_list_item.dart';
 import 'package:violet/other/dialogs.dart';
 import 'package:violet/pages/common/utils.dart';
 import 'package:violet/pages/segment/card_panel.dart';
+import 'package:violet/pages/segment/filter_page.dart';
+import 'package:violet/pages/segment/filter_page_controller.dart';
+import 'package:violet/pages/segment/platform_navigator.dart';
 import 'package:violet/settings/settings.dart';
 import 'package:violet/widgets/article_item/article_list_item_widget.dart';
 
@@ -37,7 +40,11 @@ class _RecordViewPageState extends State<RecordViewPage> {
   bool _isLoading = true;
   String? _errorMessage;
   List<RecordArticleItem> _items = [];
+  List<RecordArticleItem> _filteredItems = [];
   List<QueryResult> _usableTabList = [];
+  final FilterController _filterController = FilterController(
+    heroKey: 'record_filter',
+  );
 
   @override
   void initState() {
@@ -155,6 +162,7 @@ class _RecordViewPageState extends State<RecordViewPage> {
         setState(() {
           _items = items;
           _usableTabList = usableTabList;
+          _applyRecordFilter();
           _isLoading = false;
         });
       }
@@ -197,6 +205,42 @@ class _RecordViewPageState extends State<RecordViewPage> {
     );
   }
 
+  void _applyRecordFilter() {
+    if (!_filterController.hasAnyActiveFilter) {
+      _filteredItems = _items;
+      return;
+    }
+    final validQrs = _items
+        .map((e) => e.queryResult)
+        .whereType<QueryResult>()
+        .toList();
+    final allowedIds = _filterController
+        .applyFilter(validQrs)
+        .map((e) => e.id())
+        .toSet();
+    _filteredItems = _items
+        .where(
+          (e) => e.queryResult != null && allowedIds.contains(e.queryResult!.id()),
+        )
+        .toList();
+  }
+
+  Future<void> _openRecordFilter() async {
+    final validQrs = _items
+        .map((e) => e.queryResult)
+        .whereType<QueryResult>()
+        .toList();
+    await PlatformNavigator.navigateFade(
+      context,
+      Provider<FilterController>.value(
+        value: _filterController,
+        child: FilterPage(queryResult: validQrs),
+      ),
+    );
+    if (!mounted) return;
+    setState(_applyRecordFilter);
+  }
+
   Widget _buildHeader(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
@@ -221,7 +265,9 @@ class _RecordViewPageState extends State<RecordViewPage> {
                 ),
                 if (!_isLoading && _items.isNotEmpty)
                   Text(
-                    '총 ${_items.length}개 작품',
+                    _filterController.hasAnyActiveFilter
+                        ? '필터됨 ${_filteredItems.length} / 총 ${_items.length}개 작품'
+                        : '총 ${_items.length}개 작품',
                     style: TextStyle(
                       fontSize: 12,
                       color: Settings.themeWhat.value
@@ -232,6 +278,17 @@ class _RecordViewPageState extends State<RecordViewPage> {
               ],
             ),
           ),
+          if (_items.isNotEmpty)
+            IconButton(
+              icon: Icon(
+                Icons.filter_list,
+                color: _filterController.hasAnyActiveFilter
+                    ? Settings.majorColor.value
+                    : null,
+              ),
+              tooltip: '필터 (페이지 수 / 태그)',
+              onPressed: _isLoading ? null : _openRecordFilter,
+            ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: '새로고침',
@@ -349,9 +406,9 @@ class _RecordViewPageState extends State<RecordViewPage> {
         mainAxisSpacing: 8,
         childAspectRatio: 3 / 4,
       ),
-      itemCount: _items.length,
+      itemCount: _filteredItems.length,
       itemBuilder: (context, index) {
-        final e = _items[index];
+        final e = _filteredItems[index];
         final itemWidth =
             (windowWidth - 16 - 8 * (columnCount - 1)) / columnCount;
         return Padding(

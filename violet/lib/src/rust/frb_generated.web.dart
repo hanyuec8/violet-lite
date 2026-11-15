@@ -6,7 +6,10 @@
 // Static analysis wrongly picks the IO variant, thus ignore this
 // ignore_for_file: argument_type_not_assignable
 
+import 'api/hangul.dart';
 import 'api/image_hash.dart';
+import 'api/index_sync.dart';
+import 'api/message_search.dart';
 import 'api/nozomi.dart';
 import 'api/simple.dart';
 import 'dart:async';
@@ -26,13 +29,49 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String dco_decode_String(dynamic raw);
 
   @protected
+  bool dco_decode_bool(dynamic raw);
+
+  @protected
+  MobileSearchFilter dco_decode_box_autoadd_mobile_search_filter(dynamic raw);
+
+  @protected
+  int dco_decode_box_autoadd_u_32(dynamic raw);
+
+  @protected
   BigInt dco_decode_box_autoadd_u_64(dynamic raw);
+
+  @protected
+  double dco_decode_f_32(dynamic raw);
 
   @protected
   double dco_decode_f_64(dynamic raw);
 
   @protected
+  FscmBuildEntry dco_decode_fscm_build_entry(dynamic raw);
+
+  @protected
+  FscmFileInfo dco_decode_fscm_file_info(dynamic raw);
+
+  @protected
+  IndexSyncStats dco_decode_index_sync_stats(dynamic raw);
+
+  @protected
+  List<String> dco_decode_list_String(dynamic raw);
+
+  @protected
+  List<FscmBuildEntry> dco_decode_list_fscm_build_entry(dynamic raw);
+
+  @protected
   List<Uint32List> dco_decode_list_list_prim_u_32_strict(dynamic raw);
+
+  @protected
+  List<MobileMessageHit> dco_decode_list_mobile_message_hit(dynamic raw);
+
+  @protected
+  Float32List dco_decode_list_prim_f_32_strict(dynamic raw);
+
+  @protected
+  List<int> dco_decode_list_prim_u_32_loose(dynamic raw);
 
   @protected
   Uint32List dco_decode_list_prim_u_32_strict(dynamic raw);
@@ -44,7 +83,36 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  MobileMessageHit dco_decode_mobile_message_hit(dynamic raw);
+
+  @protected
+  MobileSearchFilter dco_decode_mobile_search_filter(dynamic raw);
+
+  @protected
+  MobileSearchProgress dco_decode_mobile_search_progress(dynamic raw);
+
+  @protected
+  MobileSearchResponse dco_decode_mobile_search_response(dynamic raw);
+
+  @protected
+  String? dco_decode_opt_String(dynamic raw);
+
+  @protected
+  MobileSearchFilter? dco_decode_opt_box_autoadd_mobile_search_filter(
+    dynamic raw,
+  );
+
+  @protected
+  int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
+
+  @protected
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
+
+  @protected
+  Uint32List? dco_decode_opt_list_prim_u_32_strict(dynamic raw);
+
+  @protected
+  RestoredSearchToken dco_decode_restored_search_token(dynamic raw);
 
   @protected
   int dco_decode_u_32(dynamic raw);
@@ -62,15 +130,57 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
+  bool sse_decode_bool(SseDeserializer deserializer);
+
+  @protected
+  MobileSearchFilter sse_decode_box_autoadd_mobile_search_filter(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
+
+  @protected
   BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
+  double sse_decode_f_32(SseDeserializer deserializer);
 
   @protected
   double sse_decode_f_64(SseDeserializer deserializer);
 
   @protected
+  FscmBuildEntry sse_decode_fscm_build_entry(SseDeserializer deserializer);
+
+  @protected
+  FscmFileInfo sse_decode_fscm_file_info(SseDeserializer deserializer);
+
+  @protected
+  IndexSyncStats sse_decode_index_sync_stats(SseDeserializer deserializer);
+
+  @protected
+  List<String> sse_decode_list_String(SseDeserializer deserializer);
+
+  @protected
+  List<FscmBuildEntry> sse_decode_list_fscm_build_entry(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<Uint32List> sse_decode_list_list_prim_u_32_strict(
     SseDeserializer deserializer,
   );
+
+  @protected
+  List<MobileMessageHit> sse_decode_list_mobile_message_hit(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  Float32List sse_decode_list_prim_f_32_strict(SseDeserializer deserializer);
+
+  @protected
+  List<int> sse_decode_list_prim_u_32_loose(SseDeserializer deserializer);
 
   @protected
   Uint32List sse_decode_list_prim_u_32_strict(SseDeserializer deserializer);
@@ -82,7 +192,46 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  MobileMessageHit sse_decode_mobile_message_hit(SseDeserializer deserializer);
+
+  @protected
+  MobileSearchFilter sse_decode_mobile_search_filter(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MobileSearchProgress sse_decode_mobile_search_progress(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MobileSearchResponse sse_decode_mobile_search_response(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  String? sse_decode_opt_String(SseDeserializer deserializer);
+
+  @protected
+  MobileSearchFilter? sse_decode_opt_box_autoadd_mobile_search_filter(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
+
+  @protected
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
+  Uint32List? sse_decode_opt_list_prim_u_32_strict(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RestoredSearchToken sse_decode_restored_search_token(
+    SseDeserializer deserializer,
+  );
 
   @protected
   int sse_decode_u_32(SseDeserializer deserializer);
@@ -100,20 +249,74 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
-  bool sse_decode_bool(SseDeserializer deserializer);
+  void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
-  void sse_encode_String(String self, SseSerializer serializer);
+  void sse_encode_bool(bool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_mobile_search_filter(
+    MobileSearchFilter self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
 
   @protected
+  void sse_encode_f_32(double self, SseSerializer serializer);
+
+  @protected
   void sse_encode_f_64(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_fscm_build_entry(
+    FscmBuildEntry self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_fscm_file_info(FscmFileInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_index_sync_stats(
+    IndexSyncStats self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_fscm_build_entry(
+    List<FscmBuildEntry> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_list_prim_u_32_strict(
     List<Uint32List> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_mobile_message_hit(
+    List<MobileMessageHit> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_prim_f_32_strict(
+    Float32List self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_prim_u_32_loose(
+    List<int> self,
     SseSerializer serializer,
   );
 
@@ -133,7 +336,55 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_mobile_message_hit(
+    MobileMessageHit self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_mobile_search_filter(
+    MobileSearchFilter self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_mobile_search_progress(
+    MobileSearchProgress self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_mobile_search_response(
+    MobileSearchResponse self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_mobile_search_filter(
+    MobileSearchFilter? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_list_prim_u_32_strict(
+    Uint32List? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_restored_search_token(
+    RestoredSearchToken self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_u_32(int self, SseSerializer serializer);
@@ -149,9 +400,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_i_32(int self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_bool(bool self, SseSerializer serializer);
 }
 
 // Section: wire_class

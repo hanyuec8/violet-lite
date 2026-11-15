@@ -328,5 +328,8 @@
   "ignoretimeout": "타임아웃 끄기",
   "cropbookmark": "크롭 북마크",
   "cropbookmarkdesc": "북마크한 크롭 이미지들을 한 번에 살펴보세요!",
-  "recordsearchdatabaseonly": "열람기록에서 DB검색만 사용"
+  "recordsearchdatabaseonly": "열람기록에서 DB검색만 사용",
+  "hangultyporestore": "한글·영타 오타 자동 복원기",
+  "pagecountfilter": "페이지 수 필터",
+  "mobilemessagesearch": "모바일 경량 한국어 대사 검색 엔진"
 }

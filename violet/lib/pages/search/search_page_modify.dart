@@ -90,7 +90,7 @@ class _SearchPageModifyPageState extends State<SearchPageModifyPage> {
                           ),
                         ),
                       ),
-                      if (Settings.lastSearchIsPupil.value)
+                      if (Settings.lastSearchIsHitomiOnly.value)
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 4,
@@ -101,7 +101,7 @@ class _SearchPageModifyPageState extends State<SearchPageModifyPage> {
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: const Text(
-                            'Pupil',
+                            'Hitomi',
                             style: TextStyle(
                               fontSize: 10,
                               color: Colors.orange,

@@ -1,0 +1,59 @@
+{
+  "checked_at": "2026-11-15T12:33:56.801255+00:00",
+  "fscm_dist_releases": [
+    {
+      "id": 58657199,
+      "tag_name": "21.12.26-merged",
+      "name": "merged data",
+      "published_at": "2022-02-04T03:26:32Z",
+      "html_url": "https://github.com/project-violet/fscm-dist/releases/tag/21.12.26-merged",
+      "assets": [
+        {
+          "name": "0.zip",
+          "size": 224572570,
+          "updated_at": "2022-02-04T03:25:47Z",
+          "download_url": "https://github.com/project-violet/fscm-dist/releases/download/21.12.26-merged/0.zip"
+        },
+        {
+          "name": "1.zip",
+          "size": 226023175,
+          "updated_at": "2022-02-04T03:25:03Z",
+          "download_url": "https://github.com/project-violet/fscm-dist/releases/download/21.12.26-merged/1.zip"
+        },
+        {
+          "name": "2.zip",
+          "size": 223394271,
+          "updated_at": "2022-02-04T03:25:25Z",
+          "download_url": "https://github.com/project-violet/fscm-dist/releases/download/21.12.26-merged/2.zip"
+        }
+      ]
+    },
+    {
+      "id": 58566472,
+      "tag_name": "21.12.26",
+      "name": "hentai cache backup 21.12.26",
+      "published_at": "2022-02-03T03:30:02Z",
+      "html_url": "https://github.com/project-violet/fscm-dist/releases/tag/21.12.26",
+      "assets": [
+        {
+          "name": "hentai-cache-backup-2021.12.26.zip",
+          "size": 703513631,
+          "updated_at": "2022-02-03T03:30:01Z",
+          "download_url": "https://github.com/project-violet/fscm-dist/releases/download/21.12.26/hentai-cache-backup-2021.12.26.zip"
+        }
+      ]
+    }
+  ],
+  "fscm_dist_latest_commit": {
+    "sha": "fe46b7b6c1412b6cf5805289bf30be0572e27fee",
+    "date": "2022-02-05T06:54:56Z",
+    "message": "Update README.md",
+    "html_url": "https://github.com/project-violet/fscm-dist/commit/fe46b7b6c1412b6cf5805289bf30be0572e27fee"
+  },
+  "violet_message_search_latest_commit": {
+    "sha": "b51441e211994d831df99da512cb57783b32f596",
+    "date": "2026-11-08T09:58:40Z",
+    "message": "feat(message-search): filter dialogue searches by work conditions",
+    "html_url": "https://github.com/project-violet/violet/commit/b51441e211994d831df99da512cb57783b32f596"
+  }
+}

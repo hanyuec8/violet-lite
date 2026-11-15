@@ -21,6 +21,18 @@ class PatchModel {
 
 final patches = [
   PatchModel(
+    dateTime: DateTime(2026, 11, 15),
+    version: '2.1.4 Patch',
+    contents: [
+      'Dialogue Search: added on-device Korean dialogue search (Rust FFI) and auto-restorer for Korean-English typos',
+      'Optimization: added 100MB image disk cache budget management and page count filtering in bookmarks',
+    ],
+    contentsKorean: [
+      '대사 검색: 모바일 온디바이스 한국어 대사 검색(Rust FFI) 및 한글 2벌식 영타 오타 자동 복원 탑재',
+      '최적화: 이미지 디스크 캐시 100MB 상한 자동 제어 및 북마크 페이지 수 필터링 지원',
+    ],
+  ),
+  PatchModel(
     dateTime: DateTime(2026, 11, 14),
     version: '2.1.3 Patch',
     isMajor: true,

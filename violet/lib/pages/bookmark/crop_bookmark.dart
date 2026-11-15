@@ -573,6 +573,7 @@ class _CropImageWidgetState extends State<CropImageWidget> {
       fit: BoxFit.contain,
       alignment: Alignment.topLeft,
       headers: widget.headers,
+      cacheMaxAge: const Duration(hours: 6),
       retries: 100,
       timeRetry: const Duration(milliseconds: 300),
       clearMemoryCacheWhenDispose: true,

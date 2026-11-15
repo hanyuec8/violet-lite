@@ -103,7 +103,7 @@ class _StatisticsState extends State<Statistics> {
             final localResults = await QueryManager.queryIds(intIds);
             queryResults.addAll(localResults);
 
-            // 2. Missing IDs (Hitomi/Pupil works from ArticleCache in user.db)
+            // 2. Missing IDs (Hitomi works from ArticleCache in user.db)
             final foundIds = localResults.map((e) => e.id()).toSet();
             final missingIds = intIds.where((id) => !foundIds.contains(id)).toList();
             if (missingIds.isNotEmpty) {

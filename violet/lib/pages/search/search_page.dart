@@ -17,6 +17,7 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:violet/component/hentai.dart';
 import 'package:violet/component/hitomi/hybrid_loader.dart';
+import 'package:violet/component/hitomi/message_corpus_manager.dart';
 import 'package:violet/component/hitomi/population.dart';
 import 'package:violet/context/modal_bottom_sheet_context.dart';
 import 'package:violet/database/query.dart';
@@ -24,6 +25,7 @@ import 'package:violet/database/user/search.dart';
 import 'package:violet/locale/locale.dart' as trans;
 import 'package:violet/log/log.dart';
 import 'package:violet/model/article_list_item.dart';
+import 'package:violet/pages/search/message_search_view.dart';
 import 'package:violet/pages/search/search_bar_page.dart';
 import 'package:violet/pages/search/search_page_controller.dart';
 import 'package:violet/pages/search/search_page_modify.dart';
@@ -193,7 +195,7 @@ class _SearchPageState extends ThemeSwitchableState<SearchPage>
           floating: true,
           delegate: AnimatedOpacitySliver(
             searchBar: Stack(
-              children: <Widget>[searchBar(), pupilFilter(), popularSort()],
+              children: <Widget>[searchBar(), hitomiFilter(), popularSort()],
             ),
           ),
         )
@@ -466,19 +468,70 @@ class _SearchPageState extends ThemeSwitchableState<SearchPage>
       ),
     );
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(8, 8, 72 * 2, 0),
-      child: SizedBox(
-        height: 64,
-        child: Card(
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(4.0)),
+    return ListenableBuilder(
+      listenable: MessageCorpusManager.instance,
+      builder: (context, _) {
+        final canDialogue = MessageCorpusManager.instance.isReady;
+        final dialogueBtn = canDialogue
+            ? Positioned(
+                right: hasQuery ? 84.0 : 44.0,
+                top: 0.0,
+                bottom: 0.0,
+                width: 40.0,
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: () {
+                      PlatformNavigator.navigateSlide(
+                        context,
+                        const MessageSearchView(),
+                      );
+                    },
+                    child: Tooltip(
+                      message: '한국어 대사 검색',
+                      child: Icon(
+                        MdiIcons.commentSearchOutline,
+                        color: Settings.majorColor.value,
+                        size: 22,
+                      ),
+                    ),
+                  ),
+                ),
+              )
+            : Container();
+
+        final adjustedOverlay = Positioned(
+          left: 0.0,
+          top: 0.0,
+          bottom: 0.0,
+          right: (hasQuery ? 88.0 : 48.0) + (canDialogue ? 40.0 : 0.0),
+          child: searchBarOverlay.child,
+        );
+
+        return Container(
+          padding: const EdgeInsets.fromLTRB(8, 8, 72 * 2, 0),
+          child: SizedBox(
+            height: 64,
+            child: Card(
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(4.0)),
+              ),
+              elevation: !Settings.themeFlat.value ? 100 : 0,
+              clipBehavior: Clip.antiAliasWithSaveLayer,
+              child: Stack(
+                children: <Widget>[
+                  searchBar,
+                  adjustedOverlay,
+                  clearButton,
+                  dialogueBtn,
+                  favoriteButton,
+                ],
+              ),
+            ),
           ),
-          elevation: !Settings.themeFlat.value ? 100 : 0,
-          clipBehavior: Clip.antiAliasWithSaveLayer,
-          child: Stack(children: <Widget>[searchBar, searchBarOverlay, clearButton, favoriteButton]),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -627,12 +680,12 @@ class _SearchPageState extends ThemeSwitchableState<SearchPage>
     }
   }
 
-  pupilFilter() {
+  hitomiFilter() {
     final width = MediaQuery.of(context).size.width;
 
     final filterOverlay = InkWell(
       onTap: () async {
-        await c.togglePupilFilter(context);
+        await c.toggleHitomiOnlyFilter(context);
       },
       child: SizedBox(
         height: 64,
@@ -641,7 +694,7 @@ class _SearchPageState extends ThemeSwitchableState<SearchPage>
           alignment: Alignment.center,
           children: <Widget>[
             Obx(() {
-              if (c.isPupilFilterLoading.value) {
+              if (c.isHitomiFilterLoading.value) {
                 return SizedBox(
                   width: 20,
                   height: 20,
@@ -653,7 +706,7 @@ class _SearchPageState extends ThemeSwitchableState<SearchPage>
                   ),
                 );
               }
-              if (c.isPupilFilterUsed.value) {
+              if (c.isHitomiFilterUsed.value) {
                 return Icon(
                   MdiIcons.eyeCheckOutline,
                   color: Settings.majorColor.value,
@@ -684,9 +737,9 @@ class _SearchPageState extends ThemeSwitchableState<SearchPage>
       child: SizedBox(
         height: 64,
         child: Hero(
-          tag: 'pupilfilter${ModalBottomSheetContext.getCount()}',
+          tag: 'hitomifilter${ModalBottomSheetContext.getCount()}',
           child: Tooltip(
-            message: 'Pupil 전용 필터 (Violet DB 미포함 최신작)',
+            message: 'Hitomi 전용 필터 (로컬 DB 미포함 최신작)',
             child: filterBody,
           ),
         ),
@@ -822,7 +875,7 @@ class _SearchPageState extends ThemeSwitchableState<SearchPage>
         ? PlatformNavigator.navigateFade
         : PlatformNavigator.navigateSlide;
     final currentList =
-        c.isPupilFilterUsed.value ? c.pupilFilterResult : c.queryResult;
+        c.isHitomiFilterUsed.value ? c.hitomiFilterResult : c.queryResult;
     navigator(
       context,
       Provider<FilterController>.value(

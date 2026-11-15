@@ -1,6 +1,4 @@
-import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:violet/script/script_manager.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -8,8 +6,7 @@ void main() {
   group('HitomiImageResolver & Caching Tests', () {
     test('ScriptManager.getGalleryInfoRaw caches results properly', () async {
       // 캐시 맵 직접 검증
-      final testId = '99999999';
-      final sampleJson = 'var galleryinfo = {"title": "Test Gallery", "files": [{"hash": "abcdef1234567890abcdef1234567890", "haswebp": 1}]};';
+      const sampleJson = 'var galleryinfo = {"title": "Test Gallery", "files": [{"hash": "abcdef1234567890abcdef1234567890", "haswebp": 1}]};';
 
       // 1회 수동 캐시 주입 후 호출 시 캐시에서 즉시 반환되는지 확인
       // getGalleryInfoRaw가 캐시된 텍스트를 정상 반환하는 구조인지 확인

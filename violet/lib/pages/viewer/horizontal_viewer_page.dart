@@ -409,6 +409,7 @@ class _HorizontalViewerPageState extends State<HorizontalViewerPage> {
                     c.urlCache[index]!.value,
                     headers: c.headerCache[index],
                     cache: true,
+                    cacheMaxAge: const Duration(hours: 6),
                     retries: 10,
                     timeRetry: const Duration(milliseconds: 300),
                   ),
@@ -536,6 +537,7 @@ class _HorizontalViewerPageState extends State<HorizontalViewerPage> {
       c.urlCache[index]!.value,
       headers: c.headerCache[index],
       cache: true,
+      cacheMaxAge: const Duration(hours: 6),
       retries: 10,
       timeRetry: const Duration(milliseconds: 300),
     );

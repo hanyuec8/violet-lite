@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:violet/algorithm/distance.dart';
+import 'package:violet/component/hangul_auto_restorer.dart';
 import 'package:violet/component/hitomi/artists.dart';
 import 'package:violet/component/hitomi/displayed_tag.dart';
 import 'package:violet/component/hitomi/tag_catalog.dart';
@@ -139,37 +140,56 @@ class HentaiIndex {
   }
 
   static Future<void> _loadIndexes() async {
-    final directory = await getApplicationDocumentsDirectory();
+    final String baseDir = Platform.environment.containsKey('FLUTTER_TEST')
+        ? join(Directory.current.path, 'test/db')
+        : (await getApplicationDocumentsDirectory()).path;
 
     // No data on first run.
-    final path2 = _resolveFile(directory.path, 'tag-artist.json');
+    final path2 = _resolveFile(baseDir, 'tag-artist.json');
     if (!await path2.exists()) return;
     tagArtist = jsonDecode(await path2.readAsString());
-    final path3 = _resolveFile(directory.path, 'tag-group.json');
+    final path3 = _resolveFile(baseDir, 'tag-group.json');
     tagGroup = jsonDecode(await path3.readAsString());
-    final path4 = _resolveFile(directory.path, 'tag-index.json');
+    final path4 = _resolveFile(baseDir, 'tag-index.json');
     tagIndex = jsonDecode(await path4.readAsString());
-    final path5 = _resolveFile(directory.path, 'tag-uploader.json');
+    final path5 = _resolveFile(baseDir, 'tag-uploader.json');
     tagUploader = jsonDecode(await path5.readAsString());
     try {
-      final path6 = _resolveFile(directory.path, 'tag-series.json');
+      final path6 = _resolveFile(baseDir, 'tag-series.json');
       tagSeries = jsonDecode(await path6.readAsString());
-      final path7 = _resolveFile(directory.path, 'tag-character.json');
+      final path7 = _resolveFile(baseDir, 'tag-character.json');
       tagCharacter = jsonDecode(await path7.readAsString());
-      final path8 = _resolveFile(directory.path, 'character-series.json');
+      final path8 = _resolveFile(baseDir, 'character-series.json');
       characterSeries = jsonDecode(await path8.readAsString());
-      final path9 = _resolveFile(directory.path, 'series-character.json');
+      final path9 = _resolveFile(baseDir, 'series-character.json');
       seriesCharacter = jsonDecode(await path9.readAsString());
 
-      final path10 = _resolveFile(directory.path, 'character-character.json');
+      final path10 = _resolveFile(baseDir, 'character-character.json');
       characterCharacter = jsonDecode(await path10.readAsString());
-      final path11 = _resolveFile(directory.path, 'series-series.json');
+      final path11 = _resolveFile(baseDir, 'series-series.json');
       seriesSeries = jsonDecode(await path11.readAsString());
     } catch (e, st) {
       Logger.error(
         '[Hitomi-Indexes] E: $e\n'
         '$st',
       );
+    }
+
+    if (Platform.environment.containsKey('FLUTTER_TEST')) {
+      final relFile = File(
+        join(
+          Directory.current.path,
+          'assets/locale/tag/related-tag-${TagTranslate.defaultLanguage}.json',
+        ),
+      );
+      if (!await relFile.exists()) return;
+      final relatedData = json.decode(await relFile.readAsString()) as List<dynamic>;
+      relatedTag = <String, dynamic>{};
+      for (var element in relatedData) {
+        var kv = (element as Map<String, dynamic>).entries.first;
+        relatedTag[kv.key] = kv.value;
+      }
+      return;
     }
 
     var relatedData =
@@ -261,11 +281,23 @@ class HentaiIndex {
     return 0;
   }
 
+  static Future<void> reloadFromDisk() async {
+    await _loadIndexes();
+    await _loadCountMap();
+  }
+
   static Future<List<(DisplayedTag, int)>> queryAutoComplete(
     String prefix, [
     bool useTranslated = false,
   ]) async {
     await loadCountMapIfRequired();
+
+    if (Settings.enableHangulTypoRestore.value) {
+      final analyzed = HangulAutoRestorer.analyzeToken(prefix);
+      if (analyzed.restoredExpression != null) {
+        prefix = analyzed.restoredExpression!;
+      }
+    }
 
     prefix = prefix.toLowerCase().replaceAll('_', ' ');
 

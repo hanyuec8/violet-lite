@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import 'package:violet/component/hentai.dart';
 import 'package:violet/component/hitomi/hybrid_loader.dart';
+import 'package:violet/component/hitomi/message_corpus_manager.dart';
 import 'package:violet/database/query.dart';
 import 'package:violet/database/user/bookmark.dart';
 import 'package:violet/locale/locale.dart';
@@ -20,6 +21,7 @@ import 'package:violet/log/log.dart';
 import 'package:violet/other/dialogs.dart';
 import 'package:violet/pages/bookmark/group/group_artist_article_list.dart';
 import 'package:violet/pages/bookmark/group/group_artist_list.dart';
+import 'package:violet/pages/search/message_search_view.dart';
 import 'package:violet/pages/search/search_page.dart';
 import 'package:violet/pages/search/search_type.dart';
 import 'package:violet/pages/segment/card_panel.dart';
@@ -78,7 +80,8 @@ class _GroupArticleListPageState extends State<GroupArticleListPage> {
 
   bool _isIdOnly(QueryResult qr) {
     return (qr.result.keys.length == 1 && qr.result.containsKey('Id')) ||
-        (qr.tags() == null && qr.artists() == null && qr.title() == null);
+        (qr.tags() == null && qr.artists() == null && qr.title() == null) ||
+        (_filterController.hasActivePageFilter && qr.files() == null);
   }
 
   Future<void> _fetchIdOnlyItems(
@@ -463,32 +466,80 @@ class _GroupArticleListPageState extends State<GroupArticleListPage> {
   }
 
   Widget _filter() {
+    final hasFilter = _filterController.hasAnyActiveFilter;
+    final canDialogueSearch = MessageCorpusManager.instance.isReady;
+
     return Align(
       alignment: Alignment.centerRight,
-      child: Hero(
-        tag: 'searchtype\$bookmark',
-        child: Card(
-          color: Palette.themeColor,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(8.0)),
-          ),
-          elevation: !Settings.themeFlat.value ? 100 : 0,
-          clipBehavior: Clip.antiAliasWithSaveLayer,
-          child: InkWell(
-            onTap: alignOnTap,
-            onLongPress: filterOnTap,
-            child: const SizedBox(
-              height: 48,
-              width: 48,
-              child: Stack(
-                alignment: Alignment.center,
-                children: <Widget>[
-                  Icon(MdiIcons.formatListText, color: Colors.grey),
-                ],
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (canDialogueSearch)
+            Padding(
+              padding: const EdgeInsets.only(right: 4.0),
+              child: Card(
+                color: Palette.themeColor,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(8.0)),
+                ),
+                elevation: !Settings.themeFlat.value ? 100 : 0,
+                clipBehavior: Clip.antiAliasWithSaveLayer,
+                child: InkWell(
+                  onTap: () {
+                    final targetIds = filterResult.map((e) => e.id()).toList();
+                    PlatformNavigator.navigateSlide(
+                      context,
+                      MessageSearchView(
+                        scopedArticleIds: targetIds,
+                        scopeLabel: '${widget.name} (${targetIds.length}작품)',
+                      ),
+                    );
+                  },
+                  child: SizedBox(
+                    height: 48,
+                    width: 48,
+                    child: Tooltip(
+                      message: '이 북마크 폴더 내 대사 검색',
+                      child: Icon(
+                        MdiIcons.commentSearchOutline,
+                        color: Settings.majorColor.value,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          Hero(
+            tag: 'searchtype\$bookmark',
+            child: Card(
+              color: Palette.themeColor,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(8.0)),
+              ),
+              elevation: !Settings.themeFlat.value ? 100 : 0,
+              clipBehavior: Clip.antiAliasWithSaveLayer,
+              child: InkWell(
+                onTap: alignOnTap,
+                onLongPress: filterOnTap,
+                child: SizedBox(
+                  height: 48,
+                  width: 48,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: <Widget>[
+                      Icon(
+                        MdiIcons.formatListText,
+                        color: hasFilter
+                            ? Settings.majorColor.value
+                            : Colors.grey,
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }

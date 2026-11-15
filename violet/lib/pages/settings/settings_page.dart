@@ -19,6 +19,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:violet/component/app_cache_manager.dart';
 import 'package:violet/component/index.dart';
 import 'package:violet/database/database.dart';
 import 'package:violet/locale/locale.dart';
@@ -217,6 +218,7 @@ class _SettingsPageState extends ThemeSwitchableState<SettingsPage>
             });
           },
         ),
+        _CacheManageTile(),
         ListTile(
           leading: Icon(MdiIcons.tableArrowRight, color: Settings.majorColor.value),
           title: Text(Translations.instance!.trans('exportlog')),
@@ -875,6 +877,69 @@ class _SettingsPageState extends ThemeSwitchableState<SettingsPage>
           ],
         ),
       ),
+    );
+  }
+}
+
+class _CacheManageTile extends StatefulWidget {
+  @override
+  State<_CacheManageTile> createState() => _CacheManageTileState();
+}
+
+class _CacheManageTileState extends State<_CacheManageTile> {
+  int? _cacheBytes;
+  bool _clearing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshSize();
+  }
+
+  Future<void> _refreshSize() async {
+    final bytes = await AppCacheManager.calculateCacheSizeBytes();
+    if (mounted) {
+      setState(() => _cacheBytes = bytes);
+    }
+  }
+
+  Future<void> _clearCache() async {
+    if (_clearing) return;
+    setState(() => _clearing = true);
+    await AppCacheManager.clearAllCaches();
+    await _refreshSize();
+    if (mounted) {
+      setState(() => _clearing = false);
+      showToast(level: ToastLevel.check, message: '이미지 및 임시 캐시를 비웠습니다.');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sizeText = _cacheBytes == null
+        ? '계산 중...'
+        : '${(_cacheBytes! / (1024 * 1024)).toStringAsFixed(1)} MB';
+    return ListTile(
+      leading: Icon(
+        MdiIcons.broom,
+        color: Settings.majorColor.value,
+      ),
+      title: const Text('이미지 캐시 비우기'),
+      subtitle: Text(
+        '현재 캐시: $sizeText · 자동 상한 100 MB (뷰어 6시간)',
+        style: const TextStyle(fontSize: 12),
+      ),
+      trailing: _clearing
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : TextButton(
+              onPressed: _clearCache,
+              child: const Text('비우기'),
+            ),
+      onTap: _clearCache,
     );
   }
 }

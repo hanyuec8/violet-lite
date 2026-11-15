@@ -4,7 +4,8 @@ import 'package:violet/component/hitomi/tag_translate.dart';
 import 'package:violet/network/wrapper.dart' as http;
 
 class MessageSearch {
-  static late final List<(String, String, int)> autocompleteTarget;
+  static List<(String, String, int)> autocompleteTarget =
+      <(String, String, int)>[];
 
   static bool _init = false;
 
@@ -12,16 +13,20 @@ class MessageSearch {
     if (_init) return;
     _init = true;
 
-    const url =
-        'https://raw.githubusercontent.com/project-violet/violet-message-search/master/SORT-COMBINE.json';
+    try {
+      const url =
+          'https://raw.githubusercontent.com/project-violet/violet-message-search/master/SORT-COMBINE.json';
 
-    var m = jsonDecode((await http.get(url)).body) as Map<String, dynamic>;
+      var m = jsonDecode((await http.get(url)).body) as Map<String, dynamic>;
 
-    autocompleteTarget = m.entries
-        .map((e) => (e.key, TagTranslate.disassembly(e.key), e.value as int))
-        .toList();
+      autocompleteTarget = m.entries
+          .map((e) => (e.key, TagTranslate.disassembly(e.key), e.value as int))
+          .toList();
 
-    autocompleteTarget.sort((x, y) => y.$3.compareTo(x.$3));
+      autocompleteTarget.sort((x, y) => y.$3.compareTo(x.$3));
+    } catch (_) {
+      // 로컬 Rust 대사 검색은 오프라인에서도 자동완성 사전 없이 즉시 동작 가능
+    }
   }
 }
 
@@ -31,6 +36,7 @@ class MessageSearchResult {
   final int page;
   final double correctness;
   final List<double> rect;
+  final String? rawText;
 
   MessageSearchResult({
     required this.matchScore,
@@ -38,6 +44,7 @@ class MessageSearchResult {
     required this.page,
     required this.correctness,
     required this.rect,
+    this.rawText,
   });
 
   static List<MessageSearchResult> fromJson(String json) {
