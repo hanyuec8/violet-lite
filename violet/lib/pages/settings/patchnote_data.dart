@@ -21,6 +21,18 @@ class PatchModel {
 
 final patches = [
   PatchModel(
+    dateTime: DateTime(2026, 11, 17),
+    version: '2.2.6 Patch',
+    contents: [
+      'Search & Filter: supported article ID exclusion and conditional filtering (range, comparison operators), stabilized query handling and hybrid loader',
+      'UI & UX: added infinite scroll and language sync to artist article list, improved preview dots indicator with horizontal scrolling and auto-alignment',
+    ],
+    contentsKorean: [
+      '검색 및 필터: 품번(ID) 제외 태그 및 조건 검색(범위, 비교 연산자) 지원, 검색 쿼리 및 하이브리드 인덱스 안정화',
+      'UI 및 UX: 작가 상세 더보기 목록 무한 스크롤 및 언어 연동, 작품 미리보기 도트 인디케이터 가로 스크롤 및 자동 정렬 개선',
+    ],
+  ),
+  PatchModel(
     dateTime: DateTime(2026, 11, 15),
     version: '2.2.5 Patch',
     contents: [
