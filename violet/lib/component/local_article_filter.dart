@@ -4,6 +4,7 @@
 import 'package:violet/component/hangul_auto_restorer.dart';
 import 'package:violet/component/hitomi/tag_translate.dart';
 import 'package:violet/database/query.dart';
+import 'package:violet/settings/settings.dart';
 
 enum PageCompareOp { gt, gte, lt, lte, eq }
 
@@ -36,6 +37,7 @@ class LocalFilterToken {
   final PageFilterCondition? pageCondition;
   final int? minPageRange;
   final int? maxPageRange;
+  final bool isIdCondition;
   final String? field;
   final String value;
   final String? restoredKoreanValue;
@@ -45,6 +47,7 @@ class LocalFilterToken {
     this.pageCondition,
     this.minPageRange,
     this.maxPageRange,
+    this.isIdCondition = false,
     this.field,
     required this.value,
     this.restoredKoreanValue,
@@ -55,7 +58,7 @@ class LocalFilterToken {
 class LocalArticleFilter {
   static const Set<String> _validFields = {
     'artist', 'tag', 'series', 'character', 'group', 'male',
-    'female', 'lang', 'language', 'type', 'class', 'uploader',
+    'female', 'lang', 'language', 'type', 'class', 'uploader', 'id',
   };
 
   static int? extractPageCount(QueryResult article) {
@@ -159,6 +162,16 @@ class LocalArticleFilter {
         }
       }
 
+      if (RegExp(r'^id(?:!=|>=|<=|==|>|<|=)\d+$').hasMatch(lowerCore) ||
+          lowerCore.startsWith('id:')) {
+        parsed.add(LocalFilterToken(
+          isIdCondition: true,
+          value: lowerCore,
+          negative: negative,
+        ));
+        continue;
+      }
+
       final colonIdx = core.indexOf(':');
       if (colonIdx > 0) {
         final field = core.substring(0, colonIdx).toLowerCase();
@@ -188,6 +201,16 @@ class LocalArticleFilter {
   }
 
   static bool matchesToken(QueryResult article, LocalFilterToken token) {
+    if (token.isIdCondition) {
+      final rawId = article.result['Id'];
+      final articleId = rawId is num
+          ? rawId.toInt()
+          : int.tryParse(rawId?.toString() ?? '');
+      if (articleId == null) return token.negative;
+      final ok = Settings.matchesIdRule(articleId, token.value);
+      return token.negative ? !ok : ok;
+    }
+
     if (token.pageCondition != null ||
         token.minPageRange != null ||
         token.maxPageRange != null) {

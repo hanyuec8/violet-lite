@@ -69,8 +69,10 @@ class _ArtistInfoPageState extends State<ArtistInfoPage> {
   /// 현재 선택된 언어 필터가 적용된 단일 진실 공급원(SSOT) 작품 목록
   List<QueryResult> get displayArticles {
     final source = cc.isNotEmpty ? cc : allArticles;
-    if (selectedLanguage == 'all') return source;
-    return ArtistInfoPage.filterByLanguage(source, selectedLanguage);
+    final filtered = selectedLanguage == 'all'
+        ? source
+        : ArtistInfoPage.filterByLanguage(source, selectedLanguage);
+    return filtered.where((e) => !Settings.isExcluded(e)).toList();
   }
 
   // Chart component lists
@@ -856,8 +858,12 @@ class _ArtistInfoPageState extends State<ArtistInfoPage> {
           visible: displayArticles.length > maxItemCount,
           child: more(
             () => ArticleListPage(
-              cc: allArticles.isNotEmpty ? allArticles : displayArticles,
+              cc: displayArticles,
               initialLanguage: selectedLanguage,
+              artistName: widget.name,
+              artistType: widget.type,
+              isWebMode: isWebMode,
+              initialLangCache: _langArticles,
               name: '${widget.type.name.titlecase()}: ${widget.name}',
             ),
           ),

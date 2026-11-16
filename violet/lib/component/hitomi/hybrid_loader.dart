@@ -127,22 +127,30 @@ class HybridLoader {
 
           final results = <QueryResult>[];
           if (hasMainDb) {
-            final rows = await db.query(sql);
-            results.addAll(rows.map((r) {
-              final map = Map<String, dynamic>.from(r);
-              map['source'] = 'common';
-              map['is_common'] = true;
-              return QueryResult(result: map);
-            }));
+            try {
+              final rows = await db.query(sql);
+              results.addAll(rows.map((r) {
+                final map = Map<String, dynamic>.from(r);
+                map['source'] = 'common';
+                map['is_common'] = true;
+                return QueryResult(result: map);
+              }));
+            } catch (e, st) {
+              Logger.error('[HybridLoader-Artist-Db] E: $e\n$st');
+            }
           }
           if (hasExpungedDb) {
-            final expRows = await expungedDb.rawQuery(sql);
-            for (final r in expRows) {
-              final map = Map<String, dynamic>.from(r);
-              map['source'] = 'common';
-              map['is_common'] = true;
-              map['is_expunged'] = true;
-              results.add(QueryResult(result: map));
+            try {
+              final expRows = await expungedDb.rawQuery(sql);
+              for (final r in expRows) {
+                final map = Map<String, dynamic>.from(r);
+                map['source'] = 'common';
+                map['is_common'] = true;
+                map['is_expunged'] = true;
+                results.add(QueryResult(result: map));
+              }
+            } catch (e, st) {
+              Logger.error('[HybridLoader-Artist-ExpungedDb] E: $e\n$st');
             }
           }
           return results;
@@ -482,6 +490,36 @@ class HybridLoader {
     }
   }
 
+  static bool _isFilterOrNegativeToken(String rawToken) {
+    final t = rawToken.replaceAll(RegExp(r'[\(\)]'), '').trim().toLowerCase();
+    if (t.isEmpty) return false;
+    if (t.startsWith('-')) return true;
+    if (RegExp(r'^id(?:!=|>=|<=|==|>|<|=)\d+$').hasMatch(t)) return true;
+    if (RegExp(r'^id:\d+(?:~|\.\.|\-)\d+$').hasMatch(t)) return true;
+    if (RegExp(r'^page(?:>=|<=|==|>|<|=|:)').hasMatch(t)) return true;
+    if (RegExp(r'^(?:date|published)(?:>=|<=|==|>|<|=|:)').hasMatch(t)) {
+      return true;
+    }
+    return false;
+  }
+
+  static bool _isIdExcludedByQueryTokens(int id, List<String> tokens) {
+    for (final raw in tokens) {
+      final t = raw.replaceAll(RegExp(r'[\(\)]'), '').trim().toLowerCase();
+      if (t.isEmpty) continue;
+      if (t.startsWith('-')) {
+        final core = t.substring(1).trim();
+        if (Settings.isIdExcludeRule(core) && Settings.matchesIdRule(id, core)) {
+          return true;
+        }
+      } else if (t.startsWith('id!=')) {
+        final val = int.tryParse(t.substring(4).trim());
+        if (val != null && id == val) return true;
+      }
+    }
+    return false;
+  }
+
   static Future<List<int>> fetchGalleryIdsForQuery({
     required String query,
     required int page,
@@ -528,20 +566,33 @@ class HybridLoader {
       effectiveLang = explicitLang;
     }
 
-    // 언어 토큰만 있는 단독 쿼리인 경우 (예: 'lang:korean' 또는 'language:japanese')
-    if (nonLangTokens.isEmpty && explicitLang != null && explicitLang.isNotEmpty) {
+    final positiveNozomiTokens = nonLangTokens
+        .where((t) => !_isFilterOrNegativeToken(t))
+        .toList();
+
+    // 언어 토큰만 있거나 부정/필터 토큰만 있는 경우 기본 언어/전체 인덱스 사용
+    if (positiveNozomiTokens.isEmpty) {
+      if (effectiveLang != 'all') {
+        final ids = await HitomiNozomi.fetchGalleryIds(
+          HitomiNozomi.getLanguageIndexUrl(effectiveLang),
+          page,
+          pageSize: pageSize,
+        );
+        if (ids.isNotEmpty) return ids;
+        if (explicitLang != null && explicitLang.isNotEmpty) return [];
+      }
       return await HitomiNozomi.fetchGalleryIds(
-        HitomiNozomi.getLanguageIndexUrl(explicitLang),
+        HitomiNozomi.getIndexAllUrl(),
         page,
         pageSize: pageSize,
       );
     }
 
-    // 1) 다중 태그(복합 쿼리)인 경우: 각 태그별 상위 ID를 병렬 수집 후 Rust SIMD 교집합(Intersection) 산출
-    if (nonLangTokens.length > 1) {
+    // 1) 다중 태그(복합 쿼리)인 경우: 각 긍정 태그별 상위 ID를 병렬 수집 후 Rust SIMD 교집합(Intersection) 산출
+    if (positiveNozomiTokens.length > 1) {
       const multiTagFetchCount = 10000;
       final tokenResults = await Future.wait(
-        nonLangTokens.map((tok) => _fetchIdsForSingleTerm(
+        positiveNozomiTokens.map((tok) => _fetchIdsForSingleTerm(
               term: tok,
               effectiveLang: effectiveLang,
               offset: 0,
@@ -583,9 +634,7 @@ class HybridLoader {
     }
 
     // 2) 단일 태그(단독 쿼리)인 경우: 단일 페이징 고속 조회
-    final primaryTerm = nonLangTokens.isNotEmpty
-        ? nonLangTokens.first
-        : (tokens.isNotEmpty ? tokens.first : cleanQuery);
+    final primaryTerm = positiveNozomiTokens.first;
 
     return await _fetchIdsForSingleTerm(
       term: primaryTerm,
@@ -609,12 +658,14 @@ class HybridLoader {
       primaryTerm = primaryTerm.substring(4).trim();
     }
 
-    // 순수 숫자 또는 id:12345 인 경우 품번 ID 직접 반환
-    final numericId = int.tryParse(primaryTerm) ??
-        (primaryTerm.toLowerCase().startsWith('id:')
-            ? int.tryParse(primaryTerm.substring(3).trim())
-            : null);
-    if (numericId != null) {
+    // 순수 숫자 또는 id:12345 인 경우 품번 ID 직접 반환 (부정형 제외)
+    final numericId = !primaryTerm.startsWith('-')
+        ? (int.tryParse(primaryTerm) ??
+            (primaryTerm.toLowerCase().startsWith('id:')
+                ? int.tryParse(primaryTerm.substring(3).trim())
+                : null))
+        : null;
+    if (numericId != null && numericId > 0) {
       return offset == 0 ? [numericId] : <int>[];
     }
 
@@ -769,7 +820,24 @@ class HybridLoader {
 
   /// E-Hentai 검색 쿼리 정규화 (언더스코어를 공백으로 변환 및 lang -> language 변환)
   static String formatEHentaiQuery(String cleanQuery, String targetLang) {
-    var q = cleanQuery
+    final filteredTokens = cleanQuery
+        .split(RegExp(r'\s+'))
+        .where((raw) {
+          final t = raw.trim().toLowerCase();
+          if (t.isEmpty) return false;
+          final core = t.startsWith('-') ? t.substring(1) : t;
+          if (core.startsWith('id:') ||
+              RegExp(r'^id(?:!=|>=|<=|==|>|<|=)\d+$').hasMatch(core)) {
+            return false;
+          }
+          if (t.startsWith('-') && int.tryParse(core) != null) return false;
+          if (RegExp(r'^(?:page|date|published)(?:>=|<=|==|>|<|=|:)').hasMatch(core)) {
+            return false;
+          }
+          return true;
+        })
+        .join(' ');
+    var q = filteredTokens
         .replaceAll(RegExp(r'\blang:', caseSensitive: false), 'language:')
         .replaceAll('_', ' ')
         .trim();
@@ -1221,12 +1289,14 @@ class HybridLoader {
   }) async {
     final cleanQuery = query.trim();
 
-    // 순수 숫자(품번) 또는 id:숫자 단독 검색인 경우 직결 처리 (초고속 1건 반환)
-    final numericId = int.tryParse(cleanQuery) ??
-        (cleanQuery.toLowerCase().startsWith('id:')
-            ? int.tryParse(cleanQuery.substring(3).trim())
-            : null);
-    if (numericId != null) {
+    // 순수 숫자(품번) 또는 id:숫자 단독 검색인 경우 직결 처리 (초고속 1건 반환, 부정형 -12345 제외)
+    final numericId = !cleanQuery.startsWith('-')
+        ? (int.tryParse(cleanQuery) ??
+            (cleanQuery.toLowerCase().startsWith('id:')
+                ? int.tryParse(cleanQuery.substring(3).trim())
+                : null))
+        : null;
+    if (numericId != null && numericId > 0) {
       if (page > 1) return [];
       try {
         final hitomiQr = await _idQueryHitomiFast(numericId);
@@ -1357,18 +1427,37 @@ class HybridLoader {
       targetLang = 'all';
     }
 
-    // 2) 번호(Id) 및 날짜(Date) 범위 필터 추출
+    // 2) 번호(Id) 및 날짜(Date) 범위 필터 추출 (부정형 -id: 등은 제외하고 긍정 조건만 추출)
     int? filterMinId;
     int? filterMaxId;
-    final idRangeMatch = RegExp(r'id:(\d+)(?:~|\.\.|\-)(\d+)', caseSensitive: false).firstMatch(cleanQuery);
-    if (idRangeMatch != null) {
-      filterMinId = int.tryParse(idRangeMatch.group(1)!);
-      filterMaxId = int.tryParse(idRangeMatch.group(2)!);
+    for (final rawTok in nonLangTokens) {
+      final tok = rawTok.replaceAll(RegExp(r'[\(\)]'), '').trim().toLowerCase();
+      if (tok.isEmpty || tok.startsWith('-')) continue;
+      final idRangeMatch =
+          RegExp(r'^id:(\d+)(?:~|\.\.|\-)(\d+)$').firstMatch(tok);
+      if (idRangeMatch != null) {
+        filterMinId = int.tryParse(idRangeMatch.group(1)!);
+        filterMaxId = int.tryParse(idRangeMatch.group(2)!);
+      }
+      final idGteMatch = RegExp(r'^id(?:>=|>)(\d+)$').firstMatch(tok);
+      if (idGteMatch != null) {
+        final v = int.tryParse(idGteMatch.group(1)!);
+        if (v != null) filterMinId = tok.contains('>=') ? v : v + 1;
+      }
+      final idLteMatch = RegExp(r'^id(?:<=|<)(\d+)$').firstMatch(tok);
+      if (idLteMatch != null) {
+        final v = int.tryParse(idLteMatch.group(1)!);
+        if (v != null) filterMaxId = tok.contains('<=') ? v : v - 1;
+      }
+      final idEqMatch = RegExp(r'^id(?:==|=)(\d+)$').firstMatch(tok);
+      if (idEqMatch != null) {
+        final v = int.tryParse(idEqMatch.group(1)!);
+        if (v != null) {
+          filterMinId = v;
+          filterMaxId = v;
+        }
+      }
     }
-    final idGteMatch = RegExp(r'id(?:>=|>)(\d+)', caseSensitive: false).firstMatch(cleanQuery);
-    if (idGteMatch != null) filterMinId = int.tryParse(idGteMatch.group(1)!);
-    final idLteMatch = RegExp(r'id(?:<=|<)(\d+)', caseSensitive: false).firstMatch(cleanQuery);
-    if (idLteMatch != null) filterMaxId = int.tryParse(idLteMatch.group(1)!);
 
     DateTime? filterMinDate;
     DateTime? filterMaxDate;
@@ -1433,6 +1522,26 @@ class HybridLoader {
             targetLang: targetLang,
           );
         }
+        if (ids.isEmpty) return [];
+
+        // 불필요한 네트워크 호출 방지를 위해 쿼리/설정에서 제외된 품번 ID 사전 제거
+        final queryTokensForIdFilter =
+            pureQuery.split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toSet();
+        ids = ids.where((id) {
+          if (_isIdExcludedByQueryTokens(id, nonLangTokens)) return false;
+          if (Settings.excludeTags.value.isNotEmpty) {
+            final idStr = id.toString();
+            for (final rawRule in Settings.excludeTags.value) {
+              if (!Settings.isIdExcludeRule(rawRule)) continue;
+              if (queryTokensForIdFilter.contains(idStr) ||
+                  queryTokensForIdFilter.contains('id:$idStr')) {
+                continue;
+              }
+              if (Settings.matchesIdRule(id, rawRule)) return false;
+            }
+          }
+          return true;
+        }).toList();
         if (ids.isEmpty) return [];
 
         final hitomiList = <QueryResult>[];
@@ -1524,24 +1633,28 @@ class HybridLoader {
 
         final combinedResults = <QueryResult>[];
         if (hasMainDb) {
-          final rows = await db.query(sqlQuery);
-          for (final r in rows) {
-            final map = Map<String, dynamic>.from(r);
-            map['source'] = 'common';
-            map['is_common'] = true;
-            combinedResults.add(QueryResult(result: map));
-          }
+          try {
+            final rows = await db.query(sqlQuery);
+            for (final r in rows) {
+              final map = Map<String, dynamic>.from(r);
+              map['source'] = 'common';
+              map['is_common'] = true;
+              combinedResults.add(QueryResult(result: map));
+            }
+          } catch (_) {}
         }
 
         if (hasExpungedDb) {
-          final expRows = await expungedDb.rawQuery(sqlQuery);
-          for (final r in expRows) {
-            final map = Map<String, dynamic>.from(r);
-            map['source'] = 'common';
-            map['is_common'] = true;
-            map['is_expunged'] = true;
-            combinedResults.add(QueryResult(result: map));
-          }
+          try {
+            final expRows = await expungedDb.rawQuery(sqlQuery);
+            for (final r in expRows) {
+              final map = Map<String, dynamic>.from(r);
+              map['source'] = 'common';
+              map['is_common'] = true;
+              map['is_expunged'] = true;
+              combinedResults.add(QueryResult(result: map));
+            }
+          } catch (_) {}
         }
 
         return combinedResults;
@@ -1668,8 +1781,9 @@ class HybridLoader {
       merged.removeWhere((item) => Settings.isExcluded(item, currentQuery: pureQuery));
     }
 
-    // 복합 쿼리(다중 태그) 사후 정밀 검증 필터링 (2차 안전망)
-    if (nonLangTokens.length > 1) {
+    // 복합 쿼리 및 부정/품번/범위 조건 사후 정밀 검증 필터링 (2차 안전망)
+    if (nonLangTokens.length > 1 ||
+        nonLangTokens.any(_isFilterOrNegativeToken)) {
       merged.retainWhere((item) => matchesAllQueryTokens(item, nonLangTokens));
     }
 
@@ -1752,7 +1866,7 @@ class HybridLoader {
     final title = (item.title() ?? '').toString().toLowerCase();
 
     for (final rawTok in tokens) {
-      var tok = rawTok.trim();
+      var tok = rawTok.replaceAll(RegExp(r'[\(\)]'), '').trim();
       if (tok.isEmpty) continue;
 
       bool negative = false;
@@ -1760,6 +1874,67 @@ class HybridLoader {
         negative = true;
         tok = tok.substring(1).trim();
         if (tok.isEmpty) continue;
+      }
+
+      final lowerTok = tok.toLowerCase();
+      final rawId = item.result['Id'];
+      final itemId = rawId is num
+          ? rawId.toInt()
+          : int.tryParse(rawId?.toString() ?? '');
+
+      if (lowerTok.startsWith('id:') ||
+          RegExp(r'^id(?:!=|>=|<=|==|>|<|=)\d+$').hasMatch(lowerTok)) {
+        final matched =
+            itemId != null && Settings.matchesIdRule(itemId, lowerTok);
+        if (negative) {
+          if (matched) return false;
+        } else {
+          if (!matched) return false;
+        }
+        continue;
+      }
+
+      if (negative && int.tryParse(lowerTok) != null) {
+        final targetId = int.parse(lowerTok);
+        if (itemId != null && itemId == targetId) return false;
+        continue;
+      }
+
+      if (RegExp(r'^page(?:>=|<=|==|>|<|=|:)').hasMatch(lowerTok)) {
+        final rawFiles = item.files();
+        final pages = rawFiles is num
+            ? rawFiles.toInt()
+            : int.tryParse(rawFiles?.toString() ?? '');
+        if (pages == null) continue;
+        bool matched = true;
+        final cmp = RegExp(r'^page(>=|<=|==|>|<|=)(\d+)$').firstMatch(lowerTok);
+        final rng = RegExp(r'^page:(\d*)~(\d*)$').firstMatch(lowerTok);
+        final exact = RegExp(r'^page:(\d+)$').firstMatch(lowerTok);
+        if (cmp != null) {
+          final op = cmp.group(1)!;
+          final v = int.parse(cmp.group(2)!);
+          matched = switch (op) {
+            '>' => pages > v,
+            '>=' => pages >= v,
+            '<' => pages < v,
+            '<=' => pages <= v,
+            '=' || '==' => pages == v,
+            _ => true,
+          };
+        } else if (rng != null) {
+          final minP = int.tryParse(rng.group(1) ?? '');
+          final maxP = int.tryParse(rng.group(2) ?? '');
+          if (minP != null && pages < minP) matched = false;
+          if (maxP != null && pages > maxP) matched = false;
+        } else if (exact != null) {
+          matched = pages == int.parse(exact.group(1)!);
+        }
+        if (negative ? matched : !matched) return false;
+        continue;
+      }
+
+      if (RegExp(r'^(?:date|published)(?:>=|<=|==|>|<|=|:)').hasMatch(lowerTok)) {
+        continue;
       }
 
       final colonIdx = tok.indexOf(':');

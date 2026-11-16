@@ -485,7 +485,12 @@ class HentaiManager {
         if (cleanWhat.isNotEmpty) searchTokens.add(cleanWhat);
       }
 
-      final exclude = Settings.serializedExcludeTags.trim();
+      final exclude = Settings.excludeTags.value
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty && !Settings.isIdExcludeRule(e))
+          .map((e) => e.startsWith('-') ? e : '-$e')
+          .join(' ')
+          .trim();
       if (exclude.isNotEmpty) searchTokens.add(exclude);
 
       final search = Uri.encodeComponent(searchTokens.join(' ').trim());

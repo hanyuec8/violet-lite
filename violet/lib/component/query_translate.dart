@@ -18,10 +18,10 @@ String translate2query(String query, {bool filter = true}) {
     return 'SELECT * FROM HitomiColumnModel ${filterExistsOnHitomi ? "WHERE ExistOnHitomi=1" : ""}';
   }
 
-  // 순수 숫자(단일 품번) 단독 검색인 경우 고속 직결
-  if (tokens.length == 1) {
+  // 순수 숫자(단일 품번) 단독 검색인 경우 고속 직결 (부정형 -12345 제외)
+  if (tokens.length == 1 && !tokens[0].startsWith('-')) {
     final nn = int.tryParse(tokens[0]);
-    if (nn != null) {
+    if (nn != null && nn > 0) {
       return 'SELECT * FROM HitomiColumnModel WHERE Id=$nn';
     }
   }
@@ -83,13 +83,18 @@ class _QueryTranslator {
         (token.contains('>') || token.contains('=') || token.contains('<'))) {
       where += parsePageExpression(token, negative);
     } else if (token.startsWith('id') &&
-        (token.contains('>') || token.contains('=') || token.contains('<'))) {
+        (token.contains('>') ||
+            token.contains('=') ||
+            token.contains('<') ||
+            token.contains('!='))) {
       where += parseIdExpression(token, negative);
     } else if ((token.startsWith('date') || token.startsWith('published')) &&
         (token.contains('>') || token.contains('=') || token.contains('<'))) {
       where += parseDateExpression(token, negative);
     } else if (token.contains(':')) {
       where += parseTag(token, negative);
+    } else if (negative && int.tryParse(token) != null) {
+      where += 'Id != $token';
     } else if (token == 'random') {
       // random 단독 토큰은 WHERE 절에서 무시 (ORDER BY에서 처리)
       where += '';
@@ -258,16 +263,19 @@ class _QueryTranslator {
   }
 
   String parseIdExpression(String token, bool negative) {
-    final re = RegExp(r'id([\=\<\>]{1,2})(\d+)', caseSensitive: false);
+    final re = RegExp(r'id(!=|>=|<=|==|=|<|>)(\d+)', caseSensitive: false);
     if (re.hasMatch(token)) {
       final matches = re.allMatches(token).elementAt(0);
       final op = matches.group(1)!;
       final val = matches.group(2)!;
+      if (op == '!=') {
+        return negative ? 'Id = $val' : 'Id != $val';
+      }
       if (negative) {
         final negOp = op == '>=' ? '<' : op == '<=' ? '>' : op == '>' ? '<=' : op == '<' ? '>=' : '!=';
         return 'Id $negOp $val';
       }
-      return 'Id $op $val';
+      return 'Id ${op == '==' ? '=' : op} $val';
     }
     return '';
   }

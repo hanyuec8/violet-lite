@@ -63,11 +63,19 @@ List<Widget> buildSearchGroup(BuildContext context, VoidCallback onReload) {
           );
 
           if (vv?.$1 == 1) {
-            final cleanTags = vv!.$2
-                .split(RegExp(r'\s+'))
-                .map((e) => e.trim())
-                .where((e) => e.isNotEmpty)
-                .toList();
+            final cleanTags = <String>[];
+            for (final raw in vv!.$2.split(RegExp(r'\s+'))) {
+              final e = raw.trim();
+              if (e.isEmpty) continue;
+              if (RegExp(r'^-?\d+(?:,-?\d+)+$').hasMatch(e)) {
+                for (final part in e.split(',')) {
+                  final p = part.trim();
+                  if (p.isNotEmpty) cleanTags.add(p);
+                }
+              } else {
+                cleanTags.add(e);
+              }
+            }
             await Settings.excludeTags.setValue(cleanTags);
             SearchPageController.current?.applyExcludedTagsFilter();
             onReload();

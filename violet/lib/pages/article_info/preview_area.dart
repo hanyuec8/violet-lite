@@ -3,6 +3,7 @@
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:violet/component/image_provider.dart';
 import 'package:violet/database/query.dart';
 import 'package:violet/util/iter_helper.dart';
@@ -13,10 +14,9 @@ typedef IntCallback = Future Function(int);
 
 class PreviewAreaWidget extends StatelessWidget {
   final QueryResult queryResult;
-  final PageController pageController = PageController(initialPage: 0);
   final IntCallback onPageTapped;
 
-  PreviewAreaWidget({
+  const PreviewAreaWidget({
     super.key,
     required this.queryResult,
     required this.onPageTapped,
@@ -155,30 +155,56 @@ class _ExpandablePageViewState extends State<ExpandablePageView>
     with TickerProviderStateMixin {
   late PageController _pageController;
   late List<double> _heights;
+  double _lastMeasuredHeight = 0.0;
   int _currentPage = 0;
 
   static const _kDuration = Duration(milliseconds: 300);
   static const _kCurve = Curves.ease;
+  static const double _kDotsTopPadding = 28.0;
 
-  double get _currentHeight => _heights[_currentPage];
+  double get _currentHeight {
+    if (_heights.isEmpty) return 0.0;
+    final index = _currentPage.clamp(0, _heights.length - 1);
+    final height = _heights[index];
+    if (height > 0) return height;
+    return _lastMeasuredHeight;
+  }
 
   @override
   void initState() {
-    _heights = widget.children.map((e) => 0.0).toList();
+    _heights = List<double>.filled(widget.children.length, 0.0);
     super.initState();
     _pageController = PageController()
       ..addListener(() {
-        final newPage = _pageController.page?.round() ?? 0;
+        if (!mounted || widget.children.isEmpty) return;
+        final newPage = (_pageController.page?.round() ?? 0).clamp(
+          0,
+          widget.children.length - 1,
+        );
         if (_currentPage != newPage) {
           setState(() {
             _currentPage = newPage;
           });
-          // context.findRenderObject()!.showOnScreen(
-          //       duration: const Duration(milliseconds: 300),
-          //       // rect: Rect.fromLTRB(0, 0, 0, _heights[0]),
-          //     );
+          _scrollToPreviewTop();
         }
       });
+  }
+
+  @override
+  void didUpdateWidget(covariant ExpandablePageView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.children.length != oldWidget.children.length) {
+      final nextHeights = List<double>.filled(widget.children.length, 0.0);
+      for (var i = 0; i < nextHeights.length && i < _heights.length; i++) {
+        nextHeights[i] = _heights[i];
+      }
+      _heights = nextHeights;
+      if (_heights.isEmpty) {
+        _currentPage = 0;
+      } else if (_currentPage >= _heights.length) {
+        _currentPage = _heights.length - 1;
+      }
+    }
   }
 
   @override
@@ -187,8 +213,65 @@ class _ExpandablePageViewState extends State<ExpandablePageView>
     super.dispose();
   }
 
+  void _scrollToPreviewTop() {
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final scrollable = Scrollable.maybeOf(context);
+      final renderObject = context.findRenderObject();
+      if (scrollable == null ||
+          renderObject == null ||
+          !renderObject.attached) {
+        return;
+      }
+      final viewport = RenderAbstractViewport.maybeOf(renderObject);
+      if (viewport == null) return;
+
+      final position = scrollable.position;
+      final revealOffset = viewport.getOffsetToReveal(renderObject, 0.0).offset;
+      final targetOffset = revealOffset.clamp(
+        position.minScrollExtent,
+        position.maxScrollExtent,
+      );
+
+      final visibleBelowTop =
+          position.viewportDimension - (revealOffset - position.pixels);
+      if (position.pixels > targetOffset || visibleBelowTop < 160.0) {
+        if ((position.pixels - targetOffset).abs() > 1.0) {
+          position.animateTo(
+            targetOffset,
+            duration: _kDuration,
+            curve: _kCurve,
+          );
+        }
+      }
+    });
+  }
+
+  void _selectPage(int page) {
+    if (widget.children.isEmpty) return;
+    final targetPage = page.clamp(0, widget.children.length - 1);
+    if (targetPage == _currentPage) {
+      _scrollToPreviewTop();
+      return;
+    }
+    if ((targetPage - _currentPage).abs() > 1) {
+      _pageController.jumpToPage(targetPage);
+    } else {
+      _pageController.animateToPage(
+        targetPage,
+        duration: _kDuration,
+        curve: _kCurve,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (widget.children.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return TweenAnimationBuilder<double>(
       curve: Curves.easeOutCirc,
       duration: const Duration(milliseconds: 400),
@@ -197,43 +280,23 @@ class _ExpandablePageViewState extends State<ExpandablePageView>
       child: Stack(
         children: [
           Padding(
-            padding: const EdgeInsets.only(top: 20.0),
+            padding: const EdgeInsets.only(top: _kDotsTopPadding),
             child: PageView(
               controller: _pageController,
-              children: _sizeReportingChildren
-                  .asMap() //
-                  .map((index, child) => MapEntry(index, child))
-                  .values
-                  .toList(),
+              children: _sizeReportingChildren,
             ),
           ),
-          FutureBuilder(
-            future: Future.value(1),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) return Container();
-
-              return Positioned(
-                top: 0.0,
-                left: 0.0,
-                right: 0.0,
-                child: Container(
-                  color: null,
-                  child: Center(
-                    child: DotsIndicator(
-                      controller: _pageController,
-                      itemCount: _sizeReportingChildren.length,
-                      onPageSelected: (int page) {
-                        _pageController.animateToPage(
-                          page,
-                          duration: _kDuration,
-                          curve: _kCurve,
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              );
-            },
+          Positioned(
+            top: 0.0,
+            left: 0.0,
+            right: 0.0,
+            child: Center(
+              child: DotsIndicator(
+                controller: _pageController,
+                itemCount: widget.children.length,
+                onPageSelected: _selectPage,
+              ),
+            ),
           ),
         ],
       ),
@@ -241,7 +304,7 @@ class _ExpandablePageViewState extends State<ExpandablePageView>
   }
 
   List<Widget> get _sizeReportingChildren => widget.children
-      .asMap() //
+      .asMap()
       .map(
         (index, child) => MapEntry(
           index,
@@ -251,8 +314,15 @@ class _ExpandablePageViewState extends State<ExpandablePageView>
             maxHeight: double.infinity,
             alignment: Alignment.topCenter,
             child: SizeReportingWidget(
-              onSizeChange: (size) =>
-                  setState(() => _heights[index] = size.height + 20.0),
+              onSizeChange: (size) {
+                final measuredHeight = size.height + _kDotsTopPadding;
+                setState(() {
+                  _heights[index] = measuredHeight;
+                  if (measuredHeight > 0) {
+                    _lastMeasuredHeight = measuredHeight;
+                  }
+                });
+              },
               child: Align(child: child),
             ),
           ),

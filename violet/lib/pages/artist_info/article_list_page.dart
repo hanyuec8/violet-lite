@@ -6,9 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
-import 'package:violet/component/hitomi/population.dart';
+import 'package:violet/component/hitomi/hybrid_loader.dart';
+import 'package:violet/component/query_translate.dart';
 import 'package:violet/database/query.dart';
+import 'package:violet/database/user/bookmark.dart';
 import 'package:violet/model/article_list_item.dart';
+import 'package:violet/pages/artist_info/artist_info_page.dart';
 import 'package:violet/pages/artist_info/search_type2.dart';
 import 'package:violet/pages/segment/filter_page.dart';
 import 'package:violet/pages/segment/filter_page_controller.dart';
@@ -23,12 +26,20 @@ class ArticleListPage extends StatefulWidget {
   final String name;
 
   final String? initialLanguage;
+  final String? artistName;
+  final ArtistType? artistType;
+  final bool isWebMode;
+  final Map<String, List<QueryResult>>? initialLangCache;
 
   const ArticleListPage({
     super.key,
     required this.name,
     required this.cc,
     this.initialLanguage,
+    this.artistName,
+    this.artistType,
+    this.isWebMode = true,
+    this.initialLangCache,
   });
 
   @override
@@ -78,6 +89,7 @@ class _ArticleListPageState extends State<ArticleListPage> {
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(0, 0, 0, 0),
                   child: CustomScrollView(
+                    controller: _scrollControllers[nowType],
                     physics: const BouncingScrollPhysics(),
                     slivers: <Widget>[
                       SliverPersistentHeader(
@@ -96,7 +108,28 @@ class _ArticleListPageState extends State<ArticleListPage> {
                       SliverToBoxAdapter(
                         child: _languageSelector(),
                       ),
-                      _cachedList!,
+                      if (_isLoadingLang)
+                        const SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 48.0),
+                            child: Center(child: CircularProgressIndicator()),
+                          ),
+                        )
+                      else
+                        _cachedList!,
+                      if (_isLoadingMore)
+                        const SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16.0),
+                            child: Center(
+                              child: SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -147,12 +180,11 @@ class _ArticleListPageState extends State<ArticleListPage> {
               });
             },
             onLongPress: () {
-              isFilterUsed = true;
               PlatformNavigator.navigateFade(
                 context,
                 Provider<FilterController>.value(
                   value: _filterController,
-                  child: FilterPage(queryResult: widget.cc),
+                  child: FilterPage(queryResult: _currentBaseSource()),
                 ),
               ).then((value) async {
                 _applyFilter();
@@ -170,10 +202,13 @@ class _ArticleListPageState extends State<ArticleListPage> {
   }
 
   Widget _title() {
+    final count = filter().length;
     return Padding(
-      padding: const EdgeInsets.only(top: 24, left: 12),
+      padding: const EdgeInsets.only(top: 24, left: 12, right: 56),
       child: Text(
-        widget.name,
+        '${widget.name} ($count)',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
       ),
     );
@@ -189,104 +224,187 @@ class _ArticleListPageState extends State<ArticleListPage> {
   bool isFilterUsed = false;
 
   void _applyFilter() {
-    var result = <QueryResult>[];
-    var isOr = _filterController.isOr;
-    for (var element in widget.cc) {
-      // key := <group>:<name>
-      var succ = !_filterController.isOr;
-      _filterController.tagStates.forEach((key, value) {
-        if (!value) return;
-
-        // Check match just only one
-        if (succ == isOr) return;
-
-        // Get db column name from group
-        var split = key.split('|');
-        var dbColumn = prefix2Tag(split[0]);
-
-        // There is no matched db column name
-        if (element.result[dbColumn] == null && !isOr) {
-          succ = false;
-          return;
-        }
-
-        // If Single Tag
-        if (!isSingleTag(split[0])) {
-          var tag = split[1];
-          if (['female', 'male'].contains(split[0])) {
-            tag = '${split[0]}:${split[1]}';
-          }
-          if ((element.result[dbColumn] as String).contains('|$tag|') == isOr) {
-            succ = isOr;
-          }
-        }
-        // If Multitag
-        else if ((element.result[dbColumn] as String == split[1]) == isOr) {
-          succ = isOr;
-        }
-      });
-      if (succ) result.add(element);
+    if (!_filterController.hasAnyActiveFilter &&
+        !_filterController.isPopulationSort) {
+      isFilterUsed = false;
+      filterResult = [];
+      return;
     }
-
-    filterResult = result;
+    filterResult = _filterController.applyFilter(_currentBaseSource());
     isFilterUsed = true;
-
-    if (_filterController.isPopulationSort) {
-      Population.sortByPopulation(filterResult);
-    }
-  }
-
-  static String prefix2Tag(String prefix) {
-    switch (prefix) {
-      case 'artist':
-        return 'Artists';
-      case 'group':
-        return 'Groups';
-      case 'language':
-        return 'Language';
-      case 'character':
-        return 'Characters';
-      case 'series':
-        return 'Series';
-      case 'class':
-        return 'Class';
-      case 'type':
-        return 'Type';
-      case 'uploader':
-        return 'Uploader';
-      case 'tag':
-      case 'female':
-      case 'male':
-        return 'Tags';
-    }
-    return '';
-  }
-
-  static bool isSingleTag(String prefix) {
-    switch (prefix) {
-      case 'language':
-      case 'class':
-      case 'type':
-      case 'uploader':
-        return true;
-      case 'artist':
-      case 'group':
-      case 'character':
-      case 'tag':
-      case 'female':
-      case 'male':
-      case 'series':
-      default:
-        return false;
-    }
   }
 
   late String selectedLanguage;
+  final Map<String, List<QueryResult>> _langArticles = {};
+  final Map<String, int> _pageByLang = {};
+  final Map<String, bool> _hasMoreByLang = {};
+  bool _isLoadingLang = false;
+  bool _isLoadingMore = false;
+  static const int _pageSize = 60;
 
   @override
   void initState() {
     super.initState();
     selectedLanguage = widget.initialLanguage ?? 'all';
+    if (widget.initialLangCache != null) {
+      for (final entry in widget.initialLangCache!.entries) {
+        _langArticles[entry.key] = List<QueryResult>.from(entry.value);
+        _pageByLang[entry.key] = 1;
+        _hasMoreByLang[entry.key] = widget.artistName != null;
+      }
+    }
+    if (widget.artistName != null) {
+      final existing = _langArticles[selectedLanguage] ?? <QueryResult>[];
+      final seen = existing.map((e) => e.id()).toSet();
+      final merged = List<QueryResult>.from(existing);
+      for (final item in widget.cc) {
+        if (!seen.contains(item.id())) {
+          seen.add(item.id());
+          merged.add(item);
+        }
+      }
+      merged.sort((a, b) => b.id().compareTo(a.id()));
+      _langArticles[selectedLanguage] = merged;
+      _pageByLang.putIfAbsent(selectedLanguage, () => 1);
+      _hasMoreByLang.putIfAbsent(selectedLanguage, () => true);
+    }
+
+    for (final c in _scrollControllers) {
+      c.addListener(_onScroll);
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final c in _scrollControllers) {
+      c.removeListener(_onScroll);
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (widget.artistName == null || widget.artistType == null) return;
+    if (_isLoadingLang || _isLoadingMore) return;
+    if (!(_hasMoreByLang[selectedLanguage] ?? false)) return;
+    final controller = _scrollControllers[nowType];
+    if (!controller.hasClients) return;
+    if (controller.position.pixels >=
+        controller.position.maxScrollExtent - 400) {
+      _loadMoreForCurrentLanguage();
+    }
+  }
+
+  Future<List<QueryResult>> _fetchArtistPage(String lang, int page) async {
+    if (widget.artistName == null || widget.artistType == null) {
+      return const [];
+    }
+    if (widget.isWebMode) {
+      return await HybridLoader.fetchArtistArticlesHybrid(
+        name: widget.artistName!,
+        type: widget.artistType!.name,
+        page: page,
+        pageSize: _pageSize,
+        language: lang,
+      );
+    }
+    final token =
+        '${widget.artistType!.name}:${widget.artistName!.replaceAll(' ', '_')}';
+    final langToken = lang != 'all' ? 'language:$lang' : '';
+    final sql = translate2query(
+      '$token $langToken ${Settings.includeTags.value} ${Settings.serializedExcludeTags}'
+          .trim(),
+    );
+    final offset = (page - 1) * _pageSize;
+    final qm = await QueryManager.query(
+      '$sql ORDER BY Id DESC LIMIT $_pageSize OFFSET $offset',
+    );
+    return qm.results ?? const [];
+  }
+
+  Future<void> _selectLanguage(String lang) async {
+    if (selectedLanguage == lang && !_isLoadingLang) return;
+    if (widget.artistName == null ||
+        widget.artistType == null ||
+        _langArticles.containsKey(lang)) {
+      setState(() {
+        selectedLanguage = lang;
+        if (isFilterUsed) _applyFilter();
+        _shouldReload = true;
+        key = ObjectKey(const Uuid().v4());
+      });
+      return;
+    }
+
+    setState(() {
+      selectedLanguage = lang;
+      _isLoadingLang = true;
+    });
+
+    try {
+      final fetched = await _fetchArtistPage(lang, 1);
+      _langArticles[lang] = fetched;
+      _pageByLang[lang] = 1;
+      _hasMoreByLang[lang] = fetched.isNotEmpty;
+    } catch (_) {
+      _langArticles[lang] = <QueryResult>[];
+      _pageByLang[lang] = 1;
+      _hasMoreByLang[lang] = false;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _isLoadingLang = false;
+      if (isFilterUsed) _applyFilter();
+      _shouldReload = true;
+      key = ObjectKey(const Uuid().v4());
+    });
+  }
+
+  Future<void> _loadMoreForCurrentLanguage() async {
+    if (_isLoadingMore || _isLoadingLang) return;
+    final lang = selectedLanguage;
+    if (!(_hasMoreByLang[lang] ?? false)) return;
+
+    setState(() {
+      _isLoadingMore = true;
+    });
+
+    try {
+      final nextPage = (_pageByLang[lang] ?? 1) + 1;
+      final fetched = await _fetchArtistPage(lang, nextPage);
+      _pageByLang[lang] = nextPage;
+
+      final current = _langArticles[lang] ?? <QueryResult>[];
+      final existingIds = current.map((e) => e.id()).toSet();
+      final added =
+          fetched.where((e) => !existingIds.contains(e.id())).toList();
+
+      if (added.isEmpty) {
+        _hasMoreByLang[lang] = false;
+      } else {
+        current.addAll(added);
+        current.sort((a, b) => b.id().compareTo(a.id()));
+        _langArticles[lang] = current;
+      }
+    } catch (_) {
+      _hasMoreByLang[lang] = false;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _isLoadingMore = false;
+      if (isFilterUsed) _applyFilter();
+      _shouldReload = true;
+    });
+  }
+
+  List<QueryResult> _currentBaseSource() {
+    if (widget.artistName != null &&
+        _langArticles.containsKey(selectedLanguage)) {
+      return _langArticles[selectedLanguage]!;
+    }
+    return widget.cc;
   }
 
   Widget _languageSelector() {
@@ -321,11 +439,7 @@ class _ArticleListPageState extends State<ArticleListPage> {
                 selectedColor: Settings.majorColor.value,
                 onSelected: (selected) {
                   if (selected) {
-                    setState(() {
-                      selectedLanguage = item.$1;
-                      _shouldReload = true;
-                      key = ObjectKey(const Uuid().v4());
-                    });
+                    _selectLanguage(item.$1);
                   }
                 },
               ),
@@ -337,20 +451,11 @@ class _ArticleListPageState extends State<ArticleListPage> {
   }
 
   List<QueryResult> filter() {
-    final base = !isFilterUsed ? widget.cc : filterResult;
-    if (selectedLanguage == 'all') return base;
-    return base.where((e) {
-      final lang = (e.language() ?? '').toString().toLowerCase();
-      final tags = (e.tags() ?? '').toString().toLowerCase();
-      final title = (e.title() ?? '').toString().toLowerCase();
-      if (selectedLanguage == 'korean') {
-        return lang == 'korean' ||
-            tags.contains('korean') ||
-            title.contains('[한국어]') ||
-            title.contains('(한국어)');
-      }
-      return lang == selectedLanguage || tags.contains(selectedLanguage);
-    }).toList();
+    final base = !isFilterUsed ? _currentBaseSource() : filterResult;
+    final langFiltered = selectedLanguage == 'all'
+        ? base
+        : ArtistInfoPage.filterByLanguage(base, selectedLanguage);
+    return langFiltered.where((e) => !Settings.isExcluded(e)).toList();
   }
 
   int nowType = 0;
@@ -361,6 +466,7 @@ class _ArticleListPageState extends State<ArticleListPage> {
   ).toList();
 
   Widget buildList() {
+    final items = filter();
     final columnCount =
         MediaQuery.of(context).orientation == Orientation.landscape ? 4 : 3;
     final mm = nowType == 0 ? columnCount : 2;
@@ -376,7 +482,7 @@ class _ArticleListPageState extends State<ArticleListPage> {
             showItemInterval: const Duration(milliseconds: 50),
             showItemDuration: const Duration(milliseconds: 150),
             visibleFraction: 0.001,
-            itemCount: filter().length,
+            itemCount: items.length,
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: mm,
               crossAxisSpacing: 8,
@@ -398,12 +504,12 @@ class _ArticleListPageState extends State<ArticleListPage> {
                       child: SizedBox(
                         child: Provider<ArticleListItem>.value(
                           value: ArticleListItem.fromArticleListItem(
-                            queryResult: filter()[index],
+                            queryResult: items[index],
                             showDetail: false,
                             addBottomPadding: false,
                             width: (windowWidth - 4.0) / mm,
                             thumbnailTag: const Uuid().v4(),
-                            usableTabList: filter(),
+                            usableTabList: items,
                           ),
                           child: const ArticleListItemWidget(),
                         ),
@@ -424,7 +530,7 @@ class _ArticleListPageState extends State<ArticleListPage> {
           sliver: LiveSliverList(
             key: key,
             controller: _scrollControllers[nowType],
-            itemCount: filter().length,
+            itemCount: items.length,
             itemBuilder: (context, index, animation) {
               return Align(
                 alignment: Alignment.center,
@@ -433,10 +539,10 @@ class _ArticleListPageState extends State<ArticleListPage> {
                     addBottomPadding: true,
                     showDetail: nowType >= 3,
                     showUltra: nowType == 4,
-                    queryResult: filter()[index],
+                    queryResult: items[index],
                     width: windowWidth - 4.0,
                     thumbnailTag: const Uuid().v4(),
-                    usableTabList: filter(),
+                    usableTabList: items,
                   ),
                   child: const ArticleListItemWidget(),
                 ),

@@ -93,16 +93,91 @@ class Settings {
   }
 
   static String get serializedExcludeTags => Settings.excludeTags.value
-      .where((e) => e.trim() != '')
-      .map((e) => '-$e')
+      .map((e) => e.trim())
+      .where((e) => e.isNotEmpty)
+      .map((e) => e.startsWith('-') ? e : '-$e')
       .join(' ')
       .trim();
+
+  static bool isIdExcludeRule(String rawRule) {
+    var rule = rawRule.trim().toLowerCase();
+    if (rule.startsWith('-')) rule = rule.substring(1).trim();
+    if (rule.isEmpty) return false;
+    if (int.tryParse(rule) != null) return true;
+    if (rule.startsWith('id:') ||
+        RegExp(r'^id(?:>=|<=|==|!=|>|<|=)\d+$').hasMatch(rule)) {
+      return true;
+    }
+    return false;
+  }
+
+  static bool matchesIdRule(int articleId, String rawRule) {
+    var rule = rawRule.trim().toLowerCase();
+    if (rule.startsWith('-')) rule = rule.substring(1).trim();
+    if (rule.isEmpty) return false;
+
+    final plainId = int.tryParse(rule);
+    if (plainId != null) {
+      return articleId == plainId;
+    }
+
+    if (rule.startsWith('id:')) {
+      final target = rule.substring(3).trim();
+      for (final part in target.split(',')) {
+        final p = part.trim();
+        if (p.isEmpty) continue;
+        final rangeMatch =
+            RegExp(r'^(\d+)(?:~|\.\.|\-)(\d+)$').firstMatch(p);
+        if (rangeMatch != null) {
+          final start = int.parse(rangeMatch.group(1)!);
+          final end = int.parse(rangeMatch.group(2)!);
+          final lo = start <= end ? start : end;
+          final hi = start <= end ? end : start;
+          if (articleId >= lo && articleId <= hi) return true;
+        } else {
+          final single = int.tryParse(p);
+          if (single != null && articleId == single) return true;
+        }
+      }
+      return false;
+    }
+
+    final cmpMatch =
+        RegExp(r'^id(>=|<=|==|!=|>|<|=)(\d+)$').firstMatch(rule);
+    if (cmpMatch != null) {
+      final op = cmpMatch.group(1)!;
+      final val = int.parse(cmpMatch.group(2)!);
+      switch (op) {
+        case '>':
+          return articleId > val;
+        case '>=':
+          return articleId >= val;
+        case '<':
+          return articleId < val;
+        case '<=':
+          return articleId <= val;
+        case '=':
+        case '==':
+          return articleId == val;
+        case '!=':
+          return articleId != val;
+      }
+    }
+
+    return false;
+  }
 
   /// 작품이 설정된 기본 제외 태그(Settings.excludeTags)에 해당하는지 판별합니다.
   /// [currentQuery]에 사용자가 직접 입력한 검색어가 있다면 해당 검색어는 예외 처리합니다.
   static bool isExcluded(QueryResult qr, {String currentQuery = ''}) {
     final excludeRules = Settings.excludeTags.value;
     if (excludeRules.isEmpty) return false;
+
+    final rawId = qr.result['Id'];
+    final int? articleId = rawId is num
+        ? rawId.toInt()
+        : int.tryParse(rawId?.toString() ?? '');
+    final String? articleIdStr = articleId?.toString();
 
     final queryTokens = currentQuery
         .toLowerCase()
@@ -165,8 +240,19 @@ class Settings {
 
       final normRule = rule.replaceAll(' ', '_');
 
-      // 사용자가 직접 검색창에 해당 태그를 검색어로 입력한 경우 제외 규칙 무시
-      if (queryTokens.contains(normRule) || queryTokens.contains(rule)) {
+      // 사용자가 직접 검색창에 해당 태그 또는 품번을 검색어로 입력한 경우 제외 규칙 무시
+      if (queryTokens.contains(normRule) ||
+          queryTokens.contains(rule) ||
+          (int.tryParse(rule) != null && queryTokens.contains('id:$rule')) ||
+          (articleIdStr != null &&
+              isIdExcludeRule(rule) &&
+              (queryTokens.contains(articleIdStr) ||
+                  queryTokens.contains('id:$articleIdStr')))) {
+        continue;
+      }
+
+      if (articleId != null && isIdExcludeRule(rule)) {
+        if (matchesIdRule(articleId, rule)) return true;
         continue;
       }
 
