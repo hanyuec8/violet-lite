@@ -21,6 +21,20 @@ class PatchModel {
 
 final patches = [
   PatchModel(
+    dateTime: DateTime(2026, 11, 20),
+    version: '2.2.7 Patch',
+    contents: [
+      'Search & Navigation: fixed last-viewed article position reset issue on main feed',
+      'Dialogue Search: added scoped condition filtering (tag autocomplete, range/negative operators)',
+      'Bookmarks: fixed select-all behavior in bookmark folder edit mode',
+    ],
+    contentsKorean: [
+      '검색 및 탐색: 메인 피드 마지막으로 본 작품 위치 자동 저장 초기화 이슈 해결',
+      '대사 검색: 작품 조건 필터링 추가(태그 자동완성, 범위/부정 연산자 지원)',
+      '북마크: 북마크 폴더에서 전체 선택 동작 안정화 버그 해결',
+    ],
+  ),
+  PatchModel(
     dateTime: DateTime(2026, 11, 17),
     version: '2.2.6 Patch',
     contents: [
