@@ -780,7 +780,9 @@ class HybridLoader {
       }
     }
 
-    // 콜론이 없는 일반 단어: 태그 -> 작가 -> 시리즈 순 스마트 조회
+    // 콜론이 없는 일반 단어: 1차 기본 언어 태그 조회 후, 부족하면 전체 태그·작가·시리즈·제목 B-Tree 병렬 조회
+    final mergedIds = <int>{};
+
     if (effectiveLang != 'all') {
       final tagIds = await HitomiNozomi.fetchTagGalleryIdsByOffset(
         primaryTerm,
@@ -788,34 +790,51 @@ class HybridLoader {
         count,
         language: effectiveLang,
       );
-      if (tagIds.isNotEmpty) return tagIds;
+      mergedIds.addAll(tagIds);
     }
-    final tagIdsAll = await HitomiNozomi.fetchTagGalleryIdsByOffset(
-      primaryTerm,
-      offset,
-      count,
-      language: 'all',
-    );
-    if (tagIdsAll.isNotEmpty) return tagIdsAll;
 
-    final artistIds = await HitomiNozomi.fetchGalleryIdsByOffset(
-      HitomiNozomi.getArtistIndexUrl(
-        primaryTerm,
-        effectiveLang != 'all' ? effectiveLang : 'all',
-      ),
-      offset,
-      count,
-    );
-    if (artistIds.isNotEmpty) return artistIds;
+    if (mergedIds.length < count) {
+      final parallelFutures = <Future<List<int>>>[
+        if (mergedIds.isEmpty && (explicitLang == null || explicitLang.isEmpty))
+          HitomiNozomi.fetchTagGalleryIdsByOffset(
+            primaryTerm,
+            offset,
+            count,
+            language: 'all',
+          ),
+        HitomiNozomi.fetchGalleryIdsByOffset(
+          HitomiNozomi.getArtistIndexUrl(
+            primaryTerm,
+            effectiveLang != 'all' ? effectiveLang : 'all',
+          ),
+          offset,
+          count,
+        ),
+        HitomiNozomi.fetchGalleryIdsByOffset(
+          HitomiNozomi.getSeriesIndexUrl(
+            primaryTerm,
+            effectiveLang != 'all' ? effectiveLang : 'all',
+          ),
+          offset,
+          count,
+        ),
+        HitomiNozomi.searchTitleWordGalleryIds(
+          primaryTerm,
+          language: effectiveLang,
+        ),
+      ];
+      final parallelResults = await Future.wait(parallelFutures);
+      for (final list in parallelResults) {
+        mergedIds.addAll(list);
+      }
+    }
 
-    return await HitomiNozomi.fetchGalleryIdsByOffset(
-      HitomiNozomi.getSeriesIndexUrl(
-        primaryTerm,
-        effectiveLang != 'all' ? effectiveLang : 'all',
-      ),
-      offset,
-      count,
-    );
+    if (mergedIds.isEmpty) return const <int>[];
+    final sorted = mergedIds.toList()..sort((a, b) => b.compareTo(a));
+    if (offset >= sorted.length) return const <int>[];
+    final end =
+        (offset + count < sorted.length) ? offset + count : sorted.length;
+    return sorted.sublist(offset, end);
   }
 
   /// E-Hentai 검색 쿼리 정규화 (언더스코어를 공백으로 변환 및 lang -> language 변환)

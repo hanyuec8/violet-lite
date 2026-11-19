@@ -410,8 +410,40 @@ class HentaiIndex {
       await _appendFromDatabase(group, name, results, seen);
     }
 
-    // tagCount가 없거나 매칭 결과가 없을 때 TagTranslate에서 직접 보충
-    if (results.isEmpty) {
+    // type: 표준 종류 자동완성 지원 (로컬 index.json이 없는 경량 모드에서도 동작)
+    if (group == 'type') {
+      const builtinTypes = [
+        ('doujinshi', '동인지'),
+        ('manga', '망가'),
+        ('artistcg', '아티스트 CG'),
+        ('gamecg', '게임 CG'),
+        ('imageset', '이미지셋'),
+        ('anime', '애니메이션'),
+      ];
+      final cleanType = name.trim().toLowerCase();
+      for (final item in builtinTypes) {
+        if (cleanType.isEmpty ||
+            item.$1.contains(cleanType) ||
+            item.$2.contains(cleanType)) {
+          final key = 'type:${item.$1}';
+          if (!seen.contains(key)) {
+            seen.add(key);
+            final count = getCount('type', item.$1);
+            results.add((
+              DisplayedTag(
+                group: 'type',
+                name: item.$1,
+                translated: item.$2,
+              ),
+              count,
+            ));
+          }
+        }
+      }
+    }
+
+    // tagCount가 없거나 매칭 결과가 부족할 때 TagTranslate에서 직접 보충
+    if (results.isEmpty || tagCount == null || !tagCount!.containsKey(group)) {
       final matches = TagTranslate.containsTotal(name)
           .where((e) => e.group == group || (group == 'tag' && (e.group == 'female' || e.group == 'male')));
       for (final tag in matches) {
@@ -729,6 +761,9 @@ class HentaiIndex {
     bool isExplicitGroupSearch = false,
   }) {
     final cleanQuery = query.trim().toLowerCase();
+    final restoredKor = Settings.enableHangulTypoRestore.value
+        ? HangulAutoRestorer.tryRestoreKoreanWord(cleanQuery)?.toLowerCase()
+        : null;
 
     int scoreTag((DisplayedTag, int) item) {
       final tag = item.$1;
@@ -742,11 +777,13 @@ class HentaiIndex {
       // 1. 일치 방식 점수 (Match Quality)
       if (name == cleanQuery) {
         score += 20000;
-      } else if (translated == cleanQuery) {
+      } else if (translated == cleanQuery ||
+          (restoredKor != null && translated == restoredKor)) {
         score += 18000;
       } else if (name.startsWith(cleanQuery)) {
         score += 15000;
-      } else if (translated.startsWith(cleanQuery)) {
+      } else if (translated.startsWith(cleanQuery) ||
+          (restoredKor != null && translated.startsWith(restoredKor))) {
         score += 13000;
       } else if (name.split(RegExp(r'[\s_]+')).any((word) => word.startsWith(cleanQuery))) {
         score += 10000;

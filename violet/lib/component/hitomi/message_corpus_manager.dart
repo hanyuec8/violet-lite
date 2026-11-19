@@ -10,9 +10,13 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:violet/component/hangul_auto_restorer.dart';
+import 'package:violet/component/hitomi/hitomi_nozomi.dart';
 import 'package:violet/component/hitomi/population.dart';
+import 'package:violet/component/hitomi/tag_translate.dart';
 import 'package:violet/component/query_translate.dart';
 import 'package:violet/database/database.dart';
+import 'package:violet/database/expunged_database.dart';
 import 'package:violet/log/log.dart';
 import 'package:violet/settings/settings.dart';
 import 'package:violet/src/rust/api/message_search.dart' as rust_msg;
@@ -62,6 +66,50 @@ enum DialogueSearchMode { contains, similar }
 
 enum DialogueSortMode { relevance, latest, popular }
 
+class ArticleFilterResolution {
+  /// null이면 전체 한국어 코퍼스 허용, 빈 리스트면 조건 일치 작품 0건
+  final List<int>? whitelistIds;
+  final int? idMin;
+  final int? idMax;
+  final Set<int> excludedIds;
+
+  /// 로컬 DB가 비어있을 때 메타데이터 조회 후 사후 필터링할 조건 (예: page>30, date>=2024)
+  final String? postFilterCondition;
+
+  /// 단독 DB 전용 조건 등으로 필터링 자체가 불가능한 경우 안내 메시지
+  final String? errorMessage;
+
+  const ArticleFilterResolution({
+    this.whitelistIds,
+    this.idMin,
+    this.idMax,
+    this.excludedIds = const <int>{},
+    this.postFilterCondition,
+    this.errorMessage,
+  });
+
+  bool get isEmptyMatch => whitelistIds != null && whitelistIds!.isEmpty;
+}
+
+abstract class _NozomiExprNode {
+  const _NozomiExprNode();
+}
+
+class _UniverseNode extends _NozomiExprNode {
+  const _UniverseNode();
+  static const instance = _UniverseNode();
+}
+
+class _SetNode extends _NozomiExprNode {
+  final Set<int> ids;
+  _SetNode(this.ids);
+}
+
+class _NegatedSetNode extends _NozomiExprNode {
+  final Set<int> excluded;
+  _NegatedSetNode(this.excluded);
+}
+
 /// 한국어 전용 경량 대사 코퍼스(`merged-ko.fscm.7z`) 옵트인 다운로드·검증·생명주기 매니저.
 class MessageCorpusManager extends ChangeNotifier {
   static final MessageCorpusManager instance = MessageCorpusManager._();
@@ -78,6 +126,7 @@ class MessageCorpusManager extends ChangeNotifier {
   int _recordCount = 0;
   int _localBytes = 0;
   int _maxArticleId = 0;
+  bool _engineMounted = false;
   CancelToken? _cancelToken;
 
   CorpusInstallState get state => _state;
@@ -86,7 +135,8 @@ class MessageCorpusManager extends ChangeNotifier {
   int get localBytes => _localBytes;
   int get maxArticleId => _maxArticleId;
   bool get isReady =>
-      Settings.enableMessageSearch.value && _state == CorpusInstallState.ready;
+      Settings.enableMessageSearch.value &&
+      (_state == CorpusInstallState.ready || _engineMounted);
   bool get isBusy =>
       _state == CorpusInstallState.checking ||
       _state == CorpusInstallState.downloading ||
@@ -176,6 +226,7 @@ class MessageCorpusManager extends ChangeNotifier {
     _recordCount = totalRecs.toInt();
     _localBytes = totalBytes;
     _maxArticleId = maxAid;
+    _engineMounted = true;
     unawaited(ensurePopularRanksSynced());
     _emit(CorpusDownloadProgress(
       state: CorpusInstallState.ready,
@@ -188,12 +239,16 @@ class MessageCorpusManager extends ChangeNotifier {
 
   Future<void> initIfEnabled() async {
     if (!Settings.enableMessageSearch.value) {
+      _engineMounted = false;
       _state = CorpusInstallState.notInstalled;
+      notifyListeners();
       return;
     }
+    if (isBusy || _engineMounted) return;
     try {
       final files = await findInstalledFscmFiles();
       if (files.isEmpty) {
+        _engineMounted = false;
         _emit(const CorpusDownloadProgress(state: CorpusInstallState.notInstalled));
         return;
       }
@@ -437,6 +492,7 @@ class MessageCorpusManager extends ChangeNotifier {
         await rust_msg.verifyFscmFile(path: f.path);
       }
 
+      _engineMounted = false;
       rust_msg.mobileSearchUnload();
 
       for (final old in await findInstalledFscmFiles()) {
@@ -477,6 +533,7 @@ class MessageCorpusManager extends ChangeNotifier {
 
   Future<void> disable({required bool deleteFiles}) async {
     cancelDownload();
+    _engineMounted = false;
     rust_msg.mobileSearchUnload();
     await Settings.enableMessageSearch.setValue(false);
     await Settings.inViewerMessageSearch.setValue(false);
@@ -488,6 +545,7 @@ class MessageCorpusManager extends ChangeNotifier {
   }
 
   Future<void> deleteCorpusFiles() async {
+    _engineMounted = false;
     rust_msg.mobileSearchUnload();
     final files = await findInstalledFscmFiles();
     for (final f in files) {
@@ -500,22 +558,648 @@ class MessageCorpusManager extends ChangeNotifier {
     _emit(const CorpusDownloadProgress(state: CorpusInstallState.notInstalled));
   }
 
+  @visibleForTesting
+  bool testForceEmptyLocalDb = false;
+
+  static final RegExp _hangulRegex = RegExp(r'[가-힣ㄱ-ㅎㅏ-ㅣ]');
+
+  static List<String> _tokenizeCondition(String input) {
+    final result = <String>[];
+    final buf = StringBuffer();
+    for (var i = 0; i < input.length; i++) {
+      final ch = input[i];
+      if (ch == ' ' || ch == '\t' || ch == '\n') {
+        if (buf.isNotEmpty) {
+          result.add(buf.toString());
+          buf.clear();
+        }
+      } else if (ch == '(' || ch == ')') {
+        if (buf.isNotEmpty) {
+          result.add(buf.toString());
+          buf.clear();
+        }
+        result.add(ch);
+      } else {
+        buf.write(ch);
+      }
+    }
+    if (buf.isNotEmpty) {
+      result.add(buf.toString());
+    }
+    return result;
+  }
+
+  static String _normalizeLangValue(String raw) {
+    final l = raw.trim().toLowerCase();
+    if (l == 'ko' || l == 'korea' || l == 'korean' || l == '한국어') {
+      return 'korean';
+    }
+    if (l == 'ja' || l == 'jp' || l == 'japan' || l == 'japanese' || l == '일본어') {
+      return 'japanese';
+    }
+    if (l == 'en' || l == 'english' || l == '영어') return 'english';
+    if (l == 'zh' || l == 'cn' || l == 'chinese' || l == '중국어') {
+      return 'chinese';
+    }
+    if (l == 'all' || l == '전체') return 'all';
+    return l;
+  }
+
+  static bool _isDbOnlyFilterToken(String rawCore) {
+    final lower = rawCore.toLowerCase();
+    if (RegExp(r'^page(?:>=|<=|==|>|<|=|:)').hasMatch(lower)) return true;
+    if (RegExp(r'^(?:date|published)(?:>=|<=|==|>|<|=|:)').hasMatch(lower)) {
+      return true;
+    }
+    if (lower.startsWith('class:')) return true;
+    return false;
+  }
+
+  static List<String> _resolveKoreanTagNames(String rawVal, {String? group}) {
+    final restored = Settings.enableHangulTypoRestore.value
+        ? (HangulAutoRestorer.tryRestoreKoreanWord(rawVal) ?? rawVal)
+        : rawVal;
+    final cleanTarget = restored.trim().toLowerCase().replaceAll(' ', '');
+    if (cleanTarget.isEmpty) return const [];
+
+    final matches = TagTranslate.containsTotal(restored).where((tag) {
+      if (group == null) return true;
+      if (group == 'tag') {
+        return tag.group == 'tag' ||
+            tag.group == 'female' ||
+            tag.group == 'male';
+      }
+      return tag.group == group;
+    }).toList();
+
+    if (matches.isEmpty) return const [];
+
+    final exactMatches = matches.where((tag) {
+      final trans = (tag.translated ?? '').toLowerCase();
+      return trans.split('|').any(
+            (part) => part.trim().replaceAll(' ', '') == cleanTarget,
+          );
+    }).toList();
+
+    final picked = (exactMatches.isNotEmpty ? exactMatches : matches).take(3);
+    return picked
+        .map((t) => t.getTag())
+        .where((s) => s.trim().isNotEmpty)
+        .toList();
+  }
+
+  Future<Set<int>> _fetchNozomiForTerm(
+    String rawCore,
+    String effectiveLang, {
+    required bool throwOnError,
+  }) async {
+    Future<Set<int>> fetchSingleUrl(String url) async {
+      final ids = await HitomiNozomi.fetchAllGalleryIds(
+        url,
+        throwOnError: throwOnError,
+      );
+      return ids.toSet();
+    }
+
+    Future<Set<int>> fetchTagUrls(String group, String val) async {
+      if (_hangulRegex.hasMatch(val)) {
+        final resolvedTags = _resolveKoreanTagNames(val, group: group);
+        if (resolvedTags.isNotEmpty) {
+          final sets = await Future.wait(
+            resolvedTags.map(
+              (t) => fetchSingleUrl(
+                HitomiNozomi.getTagIndexUrl(t, effectiveLang),
+              ),
+            ),
+          );
+          return sets.expand((e) => e).toSet();
+        }
+      }
+      if (group == 'tag') {
+        final tagSets = await Future.wait([
+          fetchSingleUrl(HitomiNozomi.getTagIndexUrl(val, effectiveLang)),
+          fetchSingleUrl(
+            HitomiNozomi.getTagIndexUrl('female:$val', effectiveLang),
+          ),
+          fetchSingleUrl(
+            HitomiNozomi.getTagIndexUrl('male:$val', effectiveLang),
+          ),
+        ]);
+        return tagSets.expand((e) => e).toSet();
+      }
+      return await fetchSingleUrl(
+        HitomiNozomi.getTagIndexUrl('$group:$val', effectiveLang),
+      );
+    }
+
+    final colonIdx = rawCore.indexOf(':');
+    if (colonIdx > 0) {
+      final prefix = rawCore.substring(0, colonIdx).trim().toLowerCase();
+      final val = rawCore.substring(colonIdx + 1).trim();
+      if (val.isEmpty) return <int>{};
+
+      switch (prefix) {
+        case 'female':
+        case 'male':
+        case 'tag':
+          return await fetchTagUrls(prefix, val);
+        case 'artist':
+          return await fetchSingleUrl(
+            HitomiNozomi.getArtistIndexUrl(val, effectiveLang),
+          );
+        case 'group':
+          return await fetchSingleUrl(
+            HitomiNozomi.getGroupIndexUrl(val, effectiveLang),
+          );
+        case 'series':
+        case 'character':
+          final isSeries = prefix == 'series';
+          if (_hangulRegex.hasMatch(val)) {
+            final resolved = _resolveKoreanTagNames(val, group: prefix);
+            if (resolved.isNotEmpty) {
+              final sets = await Future.wait(
+                resolved.map((t) {
+                  final name = t.split(':').last;
+                  return fetchSingleUrl(
+                    isSeries
+                        ? HitomiNozomi.getSeriesIndexUrl(name, effectiveLang)
+                        : HitomiNozomi.getCharacterIndexUrl(
+                            name,
+                            effectiveLang,
+                          ),
+                  );
+                }),
+              );
+              return sets.expand((e) => e).toSet();
+            }
+          }
+          return await fetchSingleUrl(
+            isSeries
+                ? HitomiNozomi.getSeriesIndexUrl(val, effectiveLang)
+                : HitomiNozomi.getCharacterIndexUrl(val, effectiveLang),
+          );
+        case 'uploader':
+          return await fetchSingleUrl(
+            HitomiNozomi.getUploaderIndexUrl(val, effectiveLang),
+          );
+        case 'type':
+          return await fetchSingleUrl(
+            HitomiNozomi.getTypeIndexUrl(val, effectiveLang),
+          );
+        case 'lang':
+        case 'language':
+          final normLang = _normalizeLangValue(val);
+          if (normLang == 'korean') return <int>{};
+          return await fetchSingleUrl(
+            HitomiNozomi.getLanguageIndexUrl(normLang),
+          );
+      }
+    }
+
+    final restoredKor = Settings.enableHangulTypoRestore.value
+        ? HangulAutoRestorer.tryRestoreKoreanWord(rawCore)
+        : null;
+    if (_hangulRegex.hasMatch(rawCore) || restoredKor != null) {
+      final resolvedTags = _resolveKoreanTagNames(restoredKor ?? rawCore);
+      if (resolvedTags.isNotEmpty) {
+        final urls = <String>[];
+        for (final t in resolvedTags) {
+          final idx = t.indexOf(':');
+          if (idx <= 0) continue;
+          final g = t.substring(0, idx);
+          final n = t.substring(idx + 1);
+          if (g == 'female' || g == 'male' || g == 'tag') {
+            urls.add(HitomiNozomi.getTagIndexUrl(t, effectiveLang));
+          } else if (g == 'series') {
+            urls.add(HitomiNozomi.getSeriesIndexUrl(n, effectiveLang));
+          } else if (g == 'character') {
+            urls.add(HitomiNozomi.getCharacterIndexUrl(n, effectiveLang));
+          }
+        }
+        if (urls.isNotEmpty) {
+          final sets = await Future.wait(urls.map(fetchSingleUrl));
+          return sets.expand((e) => e).toSet();
+        }
+      }
+    }
+
+    final fallbackSets = await Future.wait([
+      fetchSingleUrl(HitomiNozomi.getTagIndexUrl('female:$rawCore', effectiveLang)),
+      fetchSingleUrl(HitomiNozomi.getTagIndexUrl('male:$rawCore', effectiveLang)),
+      fetchSingleUrl(HitomiNozomi.getTagIndexUrl(rawCore, effectiveLang)),
+      fetchSingleUrl(HitomiNozomi.getArtistIndexUrl(rawCore, effectiveLang)),
+      fetchSingleUrl(HitomiNozomi.getSeriesIndexUrl(rawCore, effectiveLang)),
+    ]);
+    return fallbackSets.expand((e) => e).toSet();
+  }
+  /// 검색 DSL(예: "artist:nishi female:elf page>30")을 해석하여
+  /// 로컬 SQLite DB 및 Hitomi Nozomi 하이브리드 작품 ID 필터를 생성합니다.
+  Future<ArticleFilterResolution> resolveArticleFilter(
+    String articleCondition,
+  ) async {
+    final trimmed = articleCondition.trim();
+    if (trimmed.isEmpty) return const ArticleFilterResolution();
+
+    final normalized = Settings.enableHangulTypoRestore.value
+        ? HangulAutoRestorer.normalizeQuery(trimmed)
+        : trimmed;
+    final tokens = _tokenizeCondition(normalized);
+    if (tokens.isEmpty) return const ArticleFilterResolution();
+
+    // 1. 로컬 SQLite DB(HitomiColumnModel) 데이터 유무 확인
+    bool hasLocalMainDb = false;
+    DataBaseManager? mainDb;
+    if (!testForceEmptyLocalDb) {
+      try {
+        mainDb = await DataBaseManager.getInstance();
+        if (mainDb.db != null && mainDb.db!.isOpen) {
+          final probe = await mainDb.query(
+            'SELECT 1 FROM HitomiColumnModel LIMIT 1',
+          );
+          hasLocalMainDb = probe.isNotEmpty;
+        }
+      } catch (_) {}
+    }
+
+    // 2. 언어 및 DB 전용 사후 필터 토큰 / ID 범위 스캔
+    String effectiveLang = 'korean';
+    bool hasExplicitNonKoreanLang = false;
+    int? idMin;
+    int? idMax;
+    final excludedIds = <int>{};
+    final postFilterTokens = <String>[];
+    bool hasDbOnlyTokens = false;
+    bool hasNozomiOrIdTokens = false;
+
+    for (final raw in tokens) {
+      if (raw == '(' || raw == ')' || raw.toLowerCase() == 'or') continue;
+      final negative = raw.startsWith('-') && raw.length > 1;
+      final core = negative ? raw.substring(1) : raw;
+      final lower = core.toLowerCase();
+
+      if (lower.startsWith('lang:') || lower.startsWith('language:')) {
+        final v = _normalizeLangValue(lower.split(':').last);
+        effectiveLang = v;
+        if (v != 'korean') hasExplicitNonKoreanLang = true;
+        continue;
+      }
+
+      if (_isDbOnlyFilterToken(core)) {
+        hasDbOnlyTokens = true;
+        postFilterTokens.add(raw);
+        continue;
+      }
+
+      if (int.tryParse(core) != null) {
+        final v = int.parse(core);
+        if (v > 0) {
+          hasNozomiOrIdTokens = true;
+          if (negative) {
+            excludedIds.add(v);
+          } else {
+            idMin = idMin == null ? v : (v > idMin ? v : idMin);
+            idMax = idMax == null ? v : (v < idMax ? v : idMax);
+          }
+          continue;
+        }
+      }
+
+      final idRange = RegExp(
+        r'^id:(\d+)(?:~|\.\.|\-)(\d+)$',
+        caseSensitive: false,
+      ).firstMatch(core);
+      if (idRange != null && !negative) {
+        final a = int.parse(idRange.group(1)!);
+        final b = int.parse(idRange.group(2)!);
+        final lo = a <= b ? a : b;
+        final hi = a <= b ? b : a;
+        hasNozomiOrIdTokens = true;
+        idMin = idMin == null ? lo : (lo > idMin ? lo : idMin);
+        idMax = idMax == null ? hi : (hi < idMax ? hi : idMax);
+        continue;
+      }
+
+      final idOp = RegExp(
+        r'^id(!=|>=|<=|==|>|<|=|:)(\d+)$',
+        caseSensitive: false,
+      ).firstMatch(core);
+      if (idOp != null) {
+        final op = idOp.group(1)!;
+        final v = int.parse(idOp.group(2)!);
+        hasNozomiOrIdTokens = true;
+        if (op == '!=') {
+          if (!negative) excludedIds.add(v);
+        } else if (op == ':' || op == '=' || op == '==') {
+          if (negative) {
+            excludedIds.add(v);
+          } else {
+            idMin = idMin == null ? v : (v > idMin ? v : idMin);
+            idMax = idMax == null ? v : (v < idMax ? v : idMax);
+          }
+        } else if (!negative) {
+          if (op == '>=') idMin = idMin == null ? v : (v > idMin ? v : idMin);
+          if (op == '>') {
+            idMin = idMin == null ? v + 1 : (v + 1 > idMin ? v + 1 : idMin);
+          }
+          if (op == '<=') idMax = idMax == null ? v : (v < idMax ? v : idMax);
+          if (op == '<') {
+            idMax = idMax == null ? v - 1 : (v - 1 < idMax ? v - 1 : idMax);
+          }
+        }
+        continue;
+      }
+
+      hasNozomiOrIdTokens = true;
+    }
+
+    if (idMin != null && idMax != null && idMin > idMax) {
+      return const ArticleFilterResolution(whitelistIds: <int>[]);
+    }
+
+    if (!hasLocalMainDb && hasDbOnlyTokens && !hasNozomiOrIdTokens) {
+      return const ArticleFilterResolution(
+        errorMessage:
+            '로컬 작품 DB가 없어 페이지·날짜·분류 단독 조건은 필터링할 수 없습니다.\n'
+            'female:, male:, tag:, artist: 등 태그 조건과 함께 사용해 주세요.',
+      );
+    }
+
+    // 4. 로컬 DB 쿼리 실행 (DB가 채워져 있을 때)
+    Set<int>? dbIds;
+    if (hasLocalMainDb && mainDb != null) {
+      final sqlTokens = tokens.map((tok) {
+        final neg = tok.startsWith('-') && tok.length > 1;
+        final core = neg ? tok.substring(1) : tok;
+        if (int.tryParse(core) != null) {
+          return neg ? '-id:$core' : 'id:$core';
+        }
+        return tok;
+      }).join(' ');
+      final hasLangTok = tokens.any((t) {
+        final c =
+            t.startsWith('-') ? t.substring(1).toLowerCase() : t.toLowerCase();
+        return c.startsWith('lang:') || c.startsWith('language:');
+      });
+      final queryForSql = hasLangTok ? sqlTokens : '$sqlTokens lang:korean';
+      final fullSql = translate2query(queryForSql);
+      final selectIdSql = fullSql.replaceFirst(
+        'SELECT * FROM HitomiColumnModel',
+        'SELECT Id FROM HitomiColumnModel',
+      );
+      final rows = await mainDb.query(selectIdSql);
+      dbIds = rows
+          .map((r) => (r['Id'] as num?)?.toInt())
+          .whereType<int>()
+          .where((id) => id >= 0)
+          .toSet();
+
+      try {
+        final expDb = await ExpungedDatabaseManager.getInstance();
+        if (expDb != null && expDb.isOpen) {
+          final expRows = await expDb.rawQuery(selectIdSql);
+          for (final r in expRows) {
+            final id = (r['Id'] as num?)?.toInt();
+            if (id != null && id >= 0) dbIds.add(id);
+          }
+        }
+      } catch (_) {}
+
+      if (hasDbOnlyTokens) {
+        return ArticleFilterResolution(whitelistIds: dbIds.toList());
+      }
+    }
+
+    // 5. Hitomi Nozomi 불리언 식 평가 (경량 DB 미보유 환경 핵심 경로 + 하이브리드 병합)
+    final hasOr = tokens.any((t) => t.toLowerCase() == 'or');
+    final needsNozomiScan = hasExplicitNonKoreanLang ||
+        tokens.any((raw) {
+          if (raw == '(' || raw == ')' || raw.toLowerCase() == 'or') {
+            return false;
+          }
+          final neg = raw.startsWith('-') && raw.length > 1;
+          final core = neg ? raw.substring(1) : raw;
+          final lower = core.toLowerCase();
+          if (lower.startsWith('lang:') || lower.startsWith('language:')) {
+            return false;
+          }
+          if (_isDbOnlyFilterToken(core)) return false;
+          if (int.tryParse(core) != null) return false;
+          if (RegExp(
+            r'^id(?:!=|>=|<=|==|>|<|=|:)',
+            caseSensitive: false,
+          ).hasMatch(core)) {
+            return false;
+          }
+          return true;
+        });
+
+    Set<int>? nozomiIds;
+    if (needsNozomiScan || hasOr) {
+      final evaluated = await _evaluateNozomiExpression(
+        tokens,
+        effectiveLang,
+        throwOnError: !hasLocalMainDb,
+      );
+      if (evaluated is _SetNode) {
+        nozomiIds = evaluated.ids;
+      } else if (evaluated is _NegatedSetNode) {
+        final universe = await HitomiNozomi.fetchAllGalleryIds(
+          HitomiNozomi.getLanguageIndexUrl(effectiveLang),
+          throwOnError: !hasLocalMainDb,
+        );
+        nozomiIds =
+            universe.where((id) => !evaluated.excluded.contains(id)).toSet();
+      }
+    }
+
+    // 6. 결과 병합 및 범위/제외 적용
+    Set<int>? combined;
+    if (dbIds != null && nozomiIds != null) {
+      combined = <int>{...dbIds, ...nozomiIds};
+    } else if (nozomiIds != null) {
+      combined = nozomiIds;
+    } else if (dbIds != null) {
+      combined = dbIds;
+    }
+
+    if (combined != null) {
+      combined.removeWhere(
+        (id) =>
+            excludedIds.contains(id) ||
+            (idMin != null && id < idMin) ||
+            (idMax != null && id > idMax),
+      );
+      return ArticleFilterResolution(
+        whitelistIds: combined.toList(),
+        idMin: idMin,
+        idMax: idMax,
+        excludedIds: excludedIds,
+        postFilterCondition:
+            postFilterTokens.isNotEmpty ? postFilterTokens.join(' ') : null,
+      );
+    }
+
+    return ArticleFilterResolution(
+      whitelistIds: null,
+      idMin: idMin,
+      idMax: idMax,
+      excludedIds: excludedIds,
+      postFilterCondition:
+          postFilterTokens.isNotEmpty ? postFilterTokens.join(' ') : null,
+    );
+  }
+
+  Future<_NozomiExprNode> _evaluateNozomiExpression(
+    List<String> tokens,
+    String effectiveLang, {
+    required bool throwOnError,
+  }) async {
+    var cursor = 0;
+
+    Future<_NozomiExprNode> materialize(_NozomiExprNode node) async {
+      if (node is _NegatedSetNode) {
+        final universe = await HitomiNozomi.fetchAllGalleryIds(
+          HitomiNozomi.getLanguageIndexUrl(effectiveLang),
+          throwOnError: throwOnError,
+        );
+        return _SetNode(
+          universe.where((id) => !node.excluded.contains(id)).toSet(),
+        );
+      }
+      return node;
+    }
+
+    Future<_NozomiExprNode> combineAnd(
+      _NozomiExprNode left,
+      _NozomiExprNode right,
+    ) async {
+      if (left is _UniverseNode) return right;
+      if (right is _UniverseNode) return left;
+      if (left is _SetNode && right is _SetNode) {
+        return _SetNode(left.ids.intersection(right.ids));
+      }
+      if (left is _SetNode && right is _NegatedSetNode) {
+        return _SetNode(left.ids.difference(right.excluded));
+      }
+      if (left is _NegatedSetNode && right is _SetNode) {
+        return _SetNode(right.ids.difference(left.excluded));
+      }
+      if (left is _NegatedSetNode && right is _NegatedSetNode) {
+        return _NegatedSetNode(<int>{...left.excluded, ...right.excluded});
+      }
+      return left;
+    }
+
+    Future<_NozomiExprNode> combineOr(
+      _NozomiExprNode left,
+      _NozomiExprNode right,
+    ) async {
+      if (left is _UniverseNode || right is _UniverseNode) {
+        return _UniverseNode.instance;
+      }
+      final ml = await materialize(left);
+      final mr = await materialize(right);
+      if (ml is _SetNode && mr is _SetNode) {
+        return _SetNode(<int>{...ml.ids, ...mr.ids});
+      }
+      return _UniverseNode.instance;
+    }
+
+    late Future<_NozomiExprNode> Function() parseOr;
+
+    Future<_NozomiExprNode> parseAtom() async {
+      if (cursor >= tokens.length) return _UniverseNode.instance;
+      final tok = tokens[cursor++];
+
+      if (tok == '(') {
+        final inner = await parseOr();
+        if (cursor < tokens.length && tokens[cursor] == ')') {
+          cursor++;
+        }
+        return inner;
+      }
+      if (tok == ')') {
+        return _UniverseNode.instance;
+      }
+
+      final negative = tok.startsWith('-') && tok.length > 1;
+      final core = negative ? tok.substring(1) : tok;
+      final lower = core.toLowerCase();
+
+      if (_isDbOnlyFilterToken(core)) {
+        return _UniverseNode.instance;
+      }
+      if (lower.startsWith('lang:') || lower.startsWith('language:')) {
+        final v = _normalizeLangValue(lower.split(':').last);
+        if (v == 'korean' && !negative) return _UniverseNode.instance;
+        final ids = await _fetchNozomiForTerm(
+          core,
+          effectiveLang,
+          throwOnError: throwOnError,
+        );
+        return negative ? _NegatedSetNode(ids) : _SetNode(ids);
+      }
+
+      if (int.tryParse(core) != null) {
+        final v = int.parse(core);
+        return negative ? _NegatedSetNode({v}) : _SetNode({v});
+      }
+      final idEq = RegExp(
+        r'^id(?:==|=|:)(\d+)$',
+        caseSensitive: false,
+      ).firstMatch(core);
+      if (idEq != null) {
+        final v = int.parse(idEq.group(1)!);
+        return negative ? _NegatedSetNode({v}) : _SetNode({v});
+      }
+      if (RegExp(
+        r'^id(?:!=|>=|<=|==|>|<|=|:)',
+        caseSensitive: false,
+      ).hasMatch(core)) {
+        return _UniverseNode.instance;
+      }
+
+      final ids = await _fetchNozomiForTerm(
+        core,
+        effectiveLang,
+        throwOnError: throwOnError,
+      );
+      return negative ? _NegatedSetNode(ids) : _SetNode(ids);
+    }
+
+    Future<_NozomiExprNode> parseAnd() async {
+      var left = await parseAtom();
+      while (cursor < tokens.length) {
+        final next = tokens[cursor];
+        if (next == ')' || next.toLowerCase() == 'or') break;
+        final right = await parseAtom();
+        left = await combineAnd(left, right);
+      }
+      return left;
+    }
+
+    parseOr = () async {
+      var left = await parseAnd();
+      while (cursor < tokens.length && tokens[cursor].toLowerCase() == 'or') {
+        cursor++;
+        final right = await parseAnd();
+        left = await combineOr(left, right);
+      }
+      return left;
+    };
+
+    return await parseOr();
+  }
+
   /// 검색 DSL(예: "artist:nishi female:elf page>30")에 매칭되는 한국어 작품 ID 화이트리스트 조회
   Future<List<int>?> resolveArticleWhitelist(String articleCondition) async {
-    final trimmed = articleCondition.trim();
-    if (trimmed.isEmpty) return null;
-    final fullSql = translate2query('$trimmed lang:korean');
-    final selectIdSql = fullSql.replaceFirst(
-      'SELECT * FROM HitomiColumnModel',
-      'SELECT Id FROM HitomiColumnModel',
-    );
-    final db = await DataBaseManager.getInstance();
-    final rows = await db.query(selectIdSql);
-    return rows
-        .map((r) => (r['Id'] as num?)?.toInt())
-        .whereType<int>()
-        .where((id) => id >= 0)
-        .toList();
+    final res = await resolveArticleFilter(articleCondition);
+    if (res.errorMessage != null) return <int>[];
+    if (res.whitelistIds != null) return res.whitelistIds;
+    if (res.idMin != null && res.idMax != null && res.idMin == res.idMax) {
+      return <int>[res.idMin!];
+    }
+    return null;
   }
 
   rust_msg.MobileSearchProgress get progressSnapshot =>

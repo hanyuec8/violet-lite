@@ -22,6 +22,7 @@ import 'package:violet/model/article_list_item.dart';
 import 'package:violet/other/dialogs.dart';
 import 'package:violet/pages/article_info/article_info_page.dart';
 import 'package:violet/pages/common/utils.dart';
+import 'package:violet/pages/search/search_page_controller.dart';
 import 'package:violet/pages/viewer/viewer_page.dart';
 import 'package:violet/pages/viewer/viewer_page_provider.dart';
 import 'package:violet/script/script_manager.dart';
@@ -128,6 +129,16 @@ class _ArticleListItemWidgetState extends State<ArticleListItemWidget>
     initProvider.call();
   }
 
+  @override
+  void didUpdateWidget(covariant ArticleListItemWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (isChecked.value != widget.isChecked ||
+        oldWidget.isCheckMode != widget.isCheckMode) {
+      isChecked.value = widget.isChecked;
+      _doBookmarkScaling();
+    }
+  }
+
   bool firstChecked = false;
 
   BodyWidget? _body;
@@ -206,6 +217,11 @@ class _ArticleListItemWidgetState extends State<ArticleListItemWidget>
           isChecked.value &&
           c.scale.value != 0.95) {
         _animateScale(0.95);
+      } else if (widget.isCheckMode &&
+          !isChecked.value &&
+          !c.onScaling &&
+          c.scale.value != 1.0) {
+        _animateScale(1.0);
       }
     }
   }
@@ -238,6 +254,12 @@ class _ArticleListItemWidgetState extends State<ArticleListItemWidget>
     if (firstChecked) return;
 
     _animateScale(1.0);
+
+    if (!data.bookmarkMode && data.thumbnailTag.startsWith('search_')) {
+      SearchPageController.current?.recordViewedArticle(
+        c.currentQueryResult.value,
+      );
+    }
 
     showArticleInfoRaw(
       context: context,

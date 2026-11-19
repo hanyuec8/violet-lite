@@ -1,9 +1,20 @@
 // This source code is a part of Project Violet.
 // Copyright (C) 2020-2024. violet-team. Licensed under the Apache-2.0 License.
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:violet/database/query.dart';
+import 'package:violet/pages/search/search_page_controller.dart';
+import 'package:violet/settings/settings.dart';
 
 void main() {
+  setUpAll(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    SharedPreferences.setMockInitialValues({});
+    Settings.prefs = await SharedPreferences.getInstance();
+  });
+
   group('Search Position and Item Jump Synchronization Tests', () {
     const defaultPageSize = 50;
     const headerHeight = 76.0;
@@ -155,6 +166,124 @@ void main() {
       }
       expect(savedPosition, 500,
           reason: 'Explicit item jump (targetPosition > 0) must update saved position');
+    });
+
+    testWidgets('scrolling with lang:korean and Hitomi filter does not reset lastSearchPosition', (
+      WidgetTester tester,
+    ) async {
+      await Settings.lastSearchPosition.setValue(1350);
+      await Settings.lastSearchArticleId.setValue(3182945);
+      await Settings.lastSearchArticleTitle.setValue('Previously Viewed Work');
+      await Settings.lastSearchIsHitomiOnly.setValue(true);
+
+      final ctrl = SearchPageController(
+        reloadForce: ({bool isAppend = false}) {},
+        isMainSearch: true,
+      );
+      ctrl.latestQuery = (null, 'lang:korean');
+      ctrl.isHitomiFilterUsed.value = true;
+      ctrl.hitomiFilterResult = List.generate(
+        40,
+        (i) => QueryResult(result: {'Id': 4300000 - i, 'Title': 'Work $i'}),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) {
+                ctrl.initScroll(context);
+                return ListView.builder(
+                  controller: ctrl.scrollController,
+                  itemExtent: 220,
+                  itemCount: ctrl.hitomiFilterResult.length,
+                  itemBuilder: (_, i) => Text('Item $i'),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+
+      // 사용자가 리스트를 조금 아래로 스크롤하더라도 저장된 마지막 본 작품 위치(1350)는 절대 초기화되지 않아야 함
+      await tester.drag(find.byType(ListView), const Offset(0, -300));
+      await tester.pump();
+
+      expect(ctrl.searchPageNum.value, greaterThan(0));
+      expect(Settings.lastSearchPosition.value, equals(1350));
+      expect(Settings.lastSearchArticleId.value, equals(3182945));
+      expect(Settings.lastSearchArticleTitle.value, equals('Previously Viewed Work'));
+
+      // 1350 이전 위치(예: 103)에서 작품을 열람해도 기존 더 깊은 위치(1350)는 덮어쓰지 않음
+      ctrl.baseCount = 100;
+      ctrl.recordViewedArticle(ctrl.hitomiFilterResult[3]);
+      expect(Settings.lastSearchPosition.value, equals(1350));
+      expect(Settings.lastSearchArticleId.value, equals(3182945));
+
+      // 기존 위치(1350)보다 더 아래(예: baseCount=1360)로 스크롤하면 작품을 탭하지 않아도 자동 전진 기록
+      ctrl.latestQuery = (null, '(lang:korean)');
+      ctrl.baseCount = 1360;
+      await tester.drag(find.byType(ListView), const Offset(0, -400));
+      await tester.pump();
+      final advancedPos = Settings.lastSearchPosition.value;
+      final advancedId = Settings.lastSearchArticleId.value;
+      expect(advancedPos, greaterThan(1350));
+      expect(advancedId, isNot(equals(3182945)));
+
+      // 같은 세션 내에서 상단(baseCount=0)으로 되돌아와 조금만 스크롤해도 기존 깊은 위치가 초기화되지 않아야 함
+      ctrl.baseCount = 0;
+      ctrl.scrollController!.jumpTo(0);
+      await tester.pump();
+      await tester.drag(find.byType(ListView), const Offset(0, -300));
+      await tester.pump();
+      expect(Settings.lastSearchPosition.value, equals(advancedPos));
+      expect(Settings.lastSearchArticleId.value, equals(advancedId));
+
+      // 태그 검색 중에는 더 깊은 위치로 스크롤해도 메인 마지막 위치가 바뀌지 않음
+      ctrl.latestQuery = (null, 'female:elf lang:korean');
+      ctrl.baseCount = 2000;
+      await tester.drag(find.byType(ListView), const Offset(0, -300));
+      await tester.pump();
+      expect(Settings.lastSearchPosition.value, equals(advancedPos));
+      expect(Settings.lastSearchArticleId.value, equals(advancedId));
+
+      // 처음 기록이 없는 상태(0)에서 작품을 열지 않고 내리기만 해도 스크롤 위치가 자동 기록됨
+      await Settings.lastSearchPosition.setValue(0);
+      await Settings.lastSearchArticleId.setValue(0);
+      final freshCtrl = SearchPageController(
+        reloadForce: ({bool isAppend = false}) {},
+        isMainSearch: true,
+      );
+      freshCtrl.latestQuery = (null, 'lang:korean');
+      freshCtrl.isHitomiFilterUsed.value = true;
+      freshCtrl.hitomiFilterResult = List.generate(
+        40,
+        (i) => QueryResult(result: {'Id': 4400000 - i, 'Title': 'Fresh $i'}),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) {
+                freshCtrl.initScroll(context);
+                return ListView.builder(
+                  controller: freshCtrl.scrollController,
+                  itemExtent: 220,
+                  itemCount: freshCtrl.hitomiFilterResult.length,
+                  itemBuilder: (_, i) => Text('Fresh $i'),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.drag(find.byType(ListView), const Offset(0, -350));
+      await tester.pump();
+      expect(Settings.lastSearchPosition.value, greaterThan(0));
+      expect(Settings.lastSearchArticleId.value, lessThan(4400000));
+
+      ctrl.scrollController?.dispose();
+      freshCtrl.scrollController?.dispose();
     });
   });
 }

@@ -46,8 +46,14 @@ bool blurred = false;
 class SearchPage extends StatefulWidget {
   final String? searchKeyWord;
   final FocusNode? focusNode;
+  final bool skipInitialSearch;
 
-  const SearchPage({super.key, this.searchKeyWord, this.focusNode});
+  const SearchPage({
+    super.key,
+    this.searchKeyWord,
+    this.focusNode,
+    this.skipInitialSearch = false,
+  });
 
   @override
   State<SearchPage> createState() => _SearchPageState();
@@ -71,13 +77,21 @@ class _SearchPageState extends ThemeSwitchableState<SearchPage>
     super.initState();
 
     getxId = const Uuid().v4();
-    c = Get.put(SearchPageController(reloadForce: reloadForce), tag: getxId);
+    c = Get.put(
+      SearchPageController(
+        reloadForce: reloadForce,
+        isMainSearch: widget.searchKeyWord == null,
+      ),
+      tag: getxId,
+    );
 
     c.init(context);
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      doInitialSearch();
-    });
+    if (!widget.skipInitialSearch) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        doInitialSearch();
+      });
+    }
   }
 
   doInitialSearch() async {
@@ -101,6 +115,9 @@ class _SearchPageState extends ThemeSwitchableState<SearchPage>
       c.mainHybridPage = 2;
       c.baseCount = 0;
       c.searchPageNum.value = 0;
+      for (final item in hybridList) {
+        item.result['_hybridPage'] = 1;
+      }
       c.queryResult = hybridList;
       if (c.filterController.isPopulationSort) {
         Population.sortByPopulation(c.queryResult);
@@ -154,6 +171,7 @@ class _SearchPageState extends ThemeSwitchableState<SearchPage>
   Timer? _holdTimer;
 
   void reloadForce({bool isAppend = false}) {
+    if (!mounted) return;
     setState(() {
       _cachedPannel = null;
       if (!isAppend) {
@@ -346,168 +364,50 @@ class _SearchPageState extends ThemeSwitchableState<SearchPage>
           c.doSearch(setPage);
         } else if (rr[0] == 2) {
           await c.jumpToLastArticle(context);
+        } else if (rr[0] == 3) {
+          c.pinCurrentPosition();
         }
       },
     );
   }
 
-  searchBar() {
-    final searchHintText =
-        c.latestQuery != null && c.latestQuery!.$2.trim() != ''
-        ? c.latestQuery!.$2
-        : widget.searchKeyWord ?? trans.Translations.instance!.trans('search');
-
-    final textFormField = TextFormField(
-      cursorColor: Colors.black,
-      decoration: InputDecoration(
-        border: InputBorder.none,
-        focusedBorder: InputBorder.none,
-        enabledBorder: InputBorder.none,
-        errorBorder: InputBorder.none,
-        disabledBorder: InputBorder.none,
-        contentPadding: const EdgeInsets.only(
-          left: 15,
-          bottom: 11,
-          top: 11,
-          right: 15,
-        ),
-        hintText: searchHintText,
-      ),
-    );
-
-    final searchBar = Column(
-      children: <Widget>[
-        Material(
-          color: Settings.themeWhat.value
-              ? Settings.themeBlack.value
-                    ? Palette.blackThemeBackground
-                    : Colors.grey.shade900.withOpacity(0.4)
-              : Colors.grey.shade200.withOpacity(0.4),
-          child: ListTile(
-            title: textFormField,
-            leading: SizedBox(
-              width: 25,
-              height: 25,
-              child: Icon(
-                Icons.search,
-                size: 24,
-                color: Settings.majorColor.value,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-
-    final searchBarOverlay = Positioned(
-      left: 0.0,
-      top: 0.0,
-      bottom: 0.0,
-      right: (c.latestQuery != null && c.latestQuery!.$2.trim().isNotEmpty) ? 88.0 : 48.0,
+  Widget _searchBarActionButton({
+    required String tooltip,
+    required IconData icon,
+    required Color color,
+    required double size,
+    required VoidCallback onTap,
+  }) {
+    return SizedBox(
+      width: 32,
+      height: 56,
       child: Material(
         type: MaterialType.transparency,
         child: InkWell(
-          onTap: showSearchBar,
-          onDoubleTap: () async {
-            if (widget.searchKeyWord != null) return;
-            c.latestQuery = (null, 'random:${Random().nextDouble() + 1}');
-            c.doSearch();
-          },
-        ),
-      ),
-    );
-
-    final hasQuery = c.latestQuery != null && c.latestQuery!.$2.trim().isNotEmpty;
-    final clearButton = hasQuery
-        ? Positioned(
-            right: 44.0,
-            top: 0.0,
-            bottom: 0.0,
-            width: 40.0,
-            child: Material(
-              type: MaterialType.transparency,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(20),
-                onTap: () {
-                  c.latestQuery = (null, '');
-                  reloadForce(isAppend: false);
-                  c.doSearch();
-                },
-                child: const Tooltip(
-                  message: '태그 취소',
-                  child: Icon(
-                    Icons.close,
-                    size: 20,
-                    color: Colors.grey,
-                  ),
-                ),
-              ),
-            ),
-          )
-        : Container();
-
-    final favoriteButton = Positioned(
-      right: 4.0,
-      top: 0.0,
-      bottom: 0.0,
-      width: 44.0,
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(22),
-          onTap: _showFavoriteTagsSheet,
+          borderRadius: BorderRadius.circular(18),
+          onTap: onTap,
           child: Tooltip(
-            message: '태그 즐겨찾기',
-            child: Icon(
-              MdiIcons.starOutline,
-              color: Settings.majorColor.value,
-              size: 24,
-            ),
+            message: tooltip,
+            child: Icon(icon, color: color, size: size),
           ),
         ),
       ),
     );
+  }
+
+  Widget searchBar() {
+    final hasQuery =
+        c.latestQuery != null && c.latestQuery!.$2.trim().isNotEmpty;
+    final searchHintText = hasQuery
+        ? c.latestQuery!.$2
+        : widget.searchKeyWord ??
+            trans.Translations.instance?.trans('search') ??
+            'Search';
 
     return ListenableBuilder(
       listenable: MessageCorpusManager.instance,
       builder: (context, _) {
         final canDialogue = MessageCorpusManager.instance.isReady;
-        final dialogueBtn = canDialogue
-            ? Positioned(
-                right: hasQuery ? 84.0 : 44.0,
-                top: 0.0,
-                bottom: 0.0,
-                width: 40.0,
-                child: Material(
-                  type: MaterialType.transparency,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(20),
-                    onTap: () {
-                      PlatformNavigator.navigateSlide(
-                        context,
-                        const MessageSearchView(),
-                      );
-                    },
-                    child: Tooltip(
-                      message: '한국어 대사 검색',
-                      child: Icon(
-                        MdiIcons.commentSearchOutline,
-                        color: Settings.majorColor.value,
-                        size: 22,
-                      ),
-                    ),
-                  ),
-                ),
-              )
-            : Container();
-
-        final adjustedOverlay = Positioned(
-          left: 0.0,
-          top: 0.0,
-          bottom: 0.0,
-          right: (hasQuery ? 88.0 : 48.0) + (canDialogue ? 40.0 : 0.0),
-          child: searchBarOverlay.child,
-        );
 
         return Container(
           padding: const EdgeInsets.fromLTRB(8, 8, 72 * 2, 0),
@@ -519,14 +419,97 @@ class _SearchPageState extends ThemeSwitchableState<SearchPage>
               ),
               elevation: !Settings.themeFlat.value ? 100 : 0,
               clipBehavior: Clip.antiAliasWithSaveLayer,
-              child: Stack(
-                children: <Widget>[
-                  searchBar,
-                  adjustedOverlay,
-                  clearButton,
-                  dialogueBtn,
-                  favoriteButton,
-                ],
+              child: Material(
+                color: Settings.themeWhat.value
+                    ? (Settings.themeBlack.value
+                        ? Palette.blackThemeBackground
+                        : Colors.grey.shade900.withValues(alpha: 0.4))
+                    : Colors.grey.shade200.withValues(alpha: 0.4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: <Widget>[
+                    Expanded(
+                      child: InkWell(
+                        onTap: showSearchBar,
+                        onDoubleTap: () async {
+                          if (widget.searchKeyWord != null) return;
+                          c.latestQuery = (
+                            null,
+                            'random:${Random().nextDouble() + 1}',
+                          );
+                          c.doSearch();
+                        },
+                        child: SizedBox(
+                          height: 64,
+                          child: Row(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  left: 12,
+                                  right: 10,
+                                ),
+                                child: Icon(
+                                  Icons.search,
+                                  size: 22,
+                                  color: Settings.majorColor.value,
+                                ),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  searchHintText,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    color: hasQuery
+                                        ? Theme.of(
+                                            context,
+                                          ).textTheme.bodyLarge?.color
+                                        : Theme.of(context).hintColor,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (hasQuery)
+                      _searchBarActionButton(
+                        tooltip: '태그 취소',
+                        icon: Icons.close,
+                        color: Colors.grey,
+                        size: 19,
+                        onTap: () {
+                          c.latestQuery = (null, '');
+                          reloadForce(isAppend: false);
+                          c.doSearch();
+                        },
+                      ),
+                    if (canDialogue)
+                      _searchBarActionButton(
+                        tooltip: '한국어 대사 검색',
+                        icon: MdiIcons.commentSearchOutline,
+                        color: Settings.majorColor.value,
+                        size: 21,
+                        onTap: () {
+                          PlatformNavigator.navigateSlide(
+                            context,
+                            const MessageSearchView(),
+                          );
+                        },
+                      ),
+                    _searchBarActionButton(
+                      tooltip: '태그 즐겨찾기',
+                      icon: MdiIcons.starOutline,
+                      color: Settings.majorColor.value,
+                      size: 22,
+                      onTap: _showFavoriteTagsSheet,
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                ),
               ),
             ),
           ),

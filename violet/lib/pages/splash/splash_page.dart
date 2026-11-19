@@ -22,6 +22,7 @@ import 'package:violet/component/index.dart';
 import 'package:violet/component/hitomi/population.dart';
 import 'package:violet/component/hitomi/tag_translate.dart';
 import 'package:violet/component/hitomi/artists.dart';
+import 'package:violet/component/hitomi/message_corpus_manager.dart';
 import 'package:violet/database/user/bookmark.dart';
 import 'package:violet/database/user/record.dart';
 import 'package:violet/locale/locale.dart';
@@ -139,6 +140,11 @@ class _SplashPageState extends State<SplashPage> {
       await ActLogger.init();
       _changeMessage('init settings...');
       await Settings.init();
+      if (Settings.enableMessageSearch.value &&
+          !MessageCorpusManager.instance.isReady &&
+          !MessageCorpusManager.instance.isBusy) {
+        unawaited(MessageCorpusManager.instance.initIfEnabled());
+      }
       _changeMessage('loading bookmark...');
       await Bookmark.load();
       _changeMessage('loading userdb...');

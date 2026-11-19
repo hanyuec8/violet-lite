@@ -63,11 +63,17 @@ class SearchPageController extends GetxController {
   int mainHybridPage = 1;
 
   final void Function({bool isAppend}) reloadForce;
+  final bool isMainSearch;
 
-  SearchPageController({required this.reloadForce});
+  SearchPageController({
+    required this.reloadForce,
+    this.isMainSearch = true,
+  });
 
   init(BuildContext context) {
-    current = this;
+    if (isMainSearch) {
+      current = this;
+    }
     asset = AssetFlare(
       bundle: rootBundle,
       name: 'assets/flare/search_close.flr',
@@ -107,7 +113,10 @@ class SearchPageController extends GetxController {
   /// 현재 검색 대상이 한국어(lang:korean)인지 판별합니다.
   bool isCurrentSearchKorean() {
     final query = latestQuery?.$2.trim().toLowerCase() ?? '';
-    final match = RegExp(r'(?:^|\s)(?:lang|language):([a-zA-Z가-힣]+)', caseSensitive: false).firstMatch(query);
+    final match = RegExp(
+      r'(?:^|[\s\(])(?:lang|language):([a-zA-Z가-힣]+)',
+      caseSensitive: false,
+    ).firstMatch(query);
     if (match != null) {
       final lang = match.group(1)!.toLowerCase();
       return lang == 'korean' || lang == '한국어';
@@ -118,6 +127,85 @@ class SearchPageController extends GetxController {
       return selectedLangs.length == 1 && selectedLangs.first == 'korean';
     }
     return false;
+  }
+
+  /// 현재 화면이 '마지막으로 본 작품' 기록 대상(메인 검색 + lang:korean + Hitomi 전용 필터, 태그 검색어 없음)인지 판별합니다.
+  bool get canRecordLastViewedArticle {
+    if (!isMainSearch || !isHitomiFilterUsed.value || !isCurrentSearchKorean()) {
+      return false;
+    }
+    final raw = (latestQuery?.$2 ?? '').trim();
+    if (raw.isEmpty) return true;
+    final tokens = raw
+        .replaceAll(RegExp(r'[\(\)]'), ' ')
+        .split(RegExp(r'\s+'))
+        .where((t) => t.isNotEmpty);
+    for (final tok in tokens) {
+      final lower = tok.toLowerCase();
+      if (lower.startsWith('lang:') || lower.startsWith('language:')) {
+        continue;
+      }
+      return false;
+    }
+    return true;
+  }
+
+  /// 사용자가 메인 한국어 Hitomi 필터 피드에서 작품을 열어보았을 때,
+  /// 기존 저장 위치 이상인 경우에만 마지막 본 작품과 위치를 기록합니다.
+  void recordViewedArticle(QueryResult item) {
+    if (!canRecordLastViewedArticle) return;
+    final id = item.id();
+    if (id <= 0) return;
+
+    final list = getSearchList();
+    final idx = list.indexWhere((e) => e.id() == id);
+    if (idx < 0) return;
+
+    final absolutePosition = baseCount + idx;
+    final savedPosition = Settings.lastSearchPosition.value;
+    if (savedPosition > 0 && absolutePosition < savedPosition) {
+      return;
+    }
+
+    final itemPage = (item.result['_hybridPage'] as int?) ?? 1;
+    Settings.lastSearchPosition.setValue(absolutePosition);
+    Settings.lastSearchArticleId.setValue(id);
+    Settings.lastSearchArticleTitle.setValue(item.title()?.toString() ?? '');
+    Settings.lastSearchIsHitomiOnly.setValue(true);
+    Settings.lastSearchMainPage.setValue(itemPage);
+  }
+
+  /// 현재 스크롤 위치(curI)의 작품을 마지막 본 위치로 저장합니다.
+  void _savePositionAtIndex(int curI) {
+    final list = getSearchList();
+    if (curI < 0 || curI >= list.length) return;
+    final item = list[curI];
+    final id = item.id();
+    if (id <= 0) return;
+
+    final absolutePosition = baseCount + curI;
+    final itemPage = (item.result['_hybridPage'] as int?) ?? 1;
+    if (Settings.lastSearchPosition.value != absolutePosition) {
+      Settings.lastSearchPosition.setValue(absolutePosition);
+    }
+    if (Settings.lastSearchArticleId.value != id) {
+      Settings.lastSearchArticleId.setValue(id);
+      Settings.lastSearchArticleTitle.setValue(item.title()?.toString() ?? '');
+      Settings.lastSearchIsHitomiOnly.setValue(true);
+    }
+    if (Settings.lastSearchMainPage.value != itemPage) {
+      Settings.lastSearchMainPage.setValue(itemPage);
+    }
+  }
+
+  /// 사용자가 Item Jump 등에서 수동으로 현재 위치를 새 기준점으로 지정할 때 호출합니다.
+  void pinCurrentPosition() {
+    if (!canRecordLastViewedArticle) return;
+    _savePositionAtIndex(searchPageNum.value);
+    Fluttertoast.showToast(
+      msg: '현재 위치(${searchPageNum.value + baseCount}번)를 마지막 본 위치로 저장했습니다.',
+      toastLength: Toast.LENGTH_SHORT,
+    );
   }
 
   scrollPositionListener() {
@@ -156,29 +244,16 @@ class SearchPageController extends GetxController {
     if (curI != searchPageNum.value) {
       searchPageNum.value = curI;
 
-      // 사용자가 직접 화면을 스크롤하고 있을 때만 위치 및 마지막 본 작품을 실시간 영구 보관합니다.
-      // (태그 검색 직후 jumpTo(0) 등 시스템 이동에 의해 직전 감상 위치/작품 기록이 리셋되는 것을 원천 방지)
       final isUserScrolling = scrollController?.hasClients == true &&
           scrollController!.position.userScrollDirection != ScrollDirection.idle;
 
-      // lang:korean 및 Hitomi 전용 필터를 켰을 때만 마지막으로 본 위치를 기억합니다 (그 외에는 절대 기록하지 않음).
-      final canRecordLastPosition = isHitomiFilterUsed.value && isCurrentSearchKorean();
-
-      if (isUserScrolling && canRecordLastPosition) {
+      if (isUserScrolling && canRecordLastViewedArticle) {
         final absolutePosition = curI + baseCount;
-        if (Settings.lastSearchPosition.value != absolutePosition) {
-          Settings.lastSearchPosition.setValue(absolutePosition);
-        }
-
-        final list = getSearchList();
-        if (curI >= 0 && curI < list.length) {
-          final item = list[curI];
-          final id = item.id();
-          if (id > 0 && Settings.lastSearchArticleId.value != id) {
-            Settings.lastSearchArticleId.setValue(id);
-            Settings.lastSearchArticleTitle.setValue(item.title() ?? '');
-            Settings.lastSearchIsHitomiOnly.setValue(true);
-          }
+        final savedPosition = Settings.lastSearchPosition.value;
+        // 단순 단조 규칙: 기존 마지막 위치(savedPosition)보다 더 뒤로 내려갔을 때만 갱신하고,
+        // 그 이전 위치에서는 어떤 스크롤/동작을 하더라도 기존 기억을 절대 덮어쓰지 않습니다.
+        if (absolutePosition > savedPosition) {
+          _savePositionAtIndex(curI);
         }
       }
     }
@@ -293,9 +368,10 @@ class SearchPageController extends GetxController {
 
       while (attempts < maxAttempts) {
         attempts++;
+        final fetchedPage = mainHybridPage;
         final hybridList = await HybridLoader.fetchMainHybridArticles(
           query: query,
-          page: mainHybridPage,
+          page: fetchedPage,
           pageSize: defaultPageSize,
           sortMode: searchSortMode.value,
         );
@@ -307,6 +383,10 @@ class SearchPageController extends GetxController {
           }
           _queryEnd = true;
           break;
+        }
+
+        for (final item in hybridList) {
+          item.result['_hybridPage'] = fetchedPage;
         }
 
         // 중복 방지 (기존 queryResult에 이미 존재하는 ID는 제외)
@@ -368,7 +448,7 @@ class SearchPageController extends GetxController {
     isFilterUsed = true;
   }
 
-  doSearch([int targetPosition = 0]) async {
+  doSearch([int targetPosition = 0, int? startHybridPage]) async {
     _queryEnd = false;
     _scrollInProgress = false;
     itemKeys.clear();
@@ -376,10 +456,12 @@ class SearchPageController extends GetxController {
     hitomiFilterResult = [];
 
     // targetPosition(점프 위치)를 기반으로 시작 페이지 및 페이지 기준 오프셋 계산 (1-indexed)
-    final startPage = (targetPosition ~/ defaultPageSize) + 1;
-    final pageBaseOffset = (startPage - 1) * defaultPageSize;
+    final startPage = startHybridPage ?? ((targetPosition ~/ defaultPageSize) + 1);
+    final pageBaseOffset = startHybridPage != null
+        ? targetPosition
+        : (startPage - 1) * defaultPageSize;
     baseCount = pageBaseOffset;
-    final targetIndexInPage = targetPosition - pageBaseOffset;
+    final targetIndexInPage = startHybridPage != null ? 0 : (targetPosition - pageBaseOffset);
 
     hitomiFilterPage = startPage;
     mainHybridPage = startPage;
@@ -390,11 +472,6 @@ class SearchPageController extends GetxController {
     isFilterUsed = false;
     searchTotalResultCount.value = baseCount;
     searchPageNum.value = targetIndexInPage;
-
-    // 명시적인 위치 점프(targetPosition > 0)이고 lang:korean + Hitomi 전용 필터가 켜져 있을 때만 위치를 갱신합니다.
-    if (targetPosition > 0 && isHitomiFilterUsed.value && isCurrentSearchKorean()) {
-      Settings.lastSearchPosition.setValue(targetPosition);
-    }
 
     if (scrollController?.hasClients ?? false) {
       scrollController?.jumpTo(0.0);
@@ -449,6 +526,9 @@ class SearchPageController extends GetxController {
 
     if (existingIndex != -1) {
       searchPageNum.value = existingIndex;
+      if (baseCount + existingIndex > Settings.lastSearchPosition.value) {
+        Settings.lastSearchPosition.setValue(baseCount + existingIndex);
+      }
       _scrollToItemIndex(existingIndex);
       Fluttertoast.showToast(
         msg: '마지막으로 본 작품(No. $targetId) 위치로 이동했습니다.',
@@ -463,7 +543,11 @@ class SearchPageController extends GetxController {
       toastLength: Toast.LENGTH_SHORT,
     );
 
-    await doSearch(targetPos);
+    final savedMainPage = Settings.lastSearchMainPage.value;
+    await doSearch(
+      targetPos,
+      (wasHitomiOnly && savedMainPage > 1) ? savedMainPage : null,
+    );
 
     // 4. doSearch 후 타깃 작품 위치 탐색
     var foundIndex = targetId > 0
@@ -481,7 +565,14 @@ class SearchPageController extends GetxController {
     }
 
     if (foundIndex != -1) {
+      if (wasHitomiOnly && Settings.lastSearchMainPage.value > 1) {
+        baseCount = (targetPos - foundIndex).clamp(0, 1000000);
+        searchTotalResultCount.value = baseCount + getSearchList().length;
+      }
       searchPageNum.value = foundIndex;
+      if (baseCount + foundIndex > Settings.lastSearchPosition.value) {
+        Settings.lastSearchPosition.setValue(baseCount + foundIndex);
+      }
       _scrollToItemIndex(foundIndex);
       Fluttertoast.showToast(
         msg: '마지막으로 본 작품(No. $targetId) 위치를 찾아 이동했습니다.',

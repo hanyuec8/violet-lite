@@ -140,6 +140,23 @@ class _SearchPageModifyPageState extends State<SearchPageModifyPage> {
                       },
                     ),
                   ),
+                  if (widget.curPage != Settings.lastSearchPosition.value) ...[
+                    const SizedBox(height: 6),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 30,
+                      child: TextButton.icon(
+                        icon: const Icon(Icons.push_pin_outlined, size: 14),
+                        label: Text(
+                          '현재 위치(${widget.curPage}번)로 덮어쓰기',
+                          style: const TextStyle(fontSize: 11.5),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(context, [3]);
+                        },
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

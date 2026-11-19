@@ -3,6 +3,7 @@
 
 import 'dart:io';
 
+import 'package:extended_image/extended_image.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:violet/component/app_cache_manager.dart';
@@ -58,6 +59,42 @@ void main() {
       expect(await fresh.exists(), isTrue);
     } finally {
       if (await dir.exists()) await dir.delete(recursive: true);
+    }
+  });
+
+  test('enforceBudgetInDirForTest caps combined cacheimage + libCachedImageData + tmp under 100MB', () async {
+    final tempDir = await Directory.systemTemp.createTemp('violet_cache_budget_');
+    try {
+      final viewerDir = Directory(p.join(tempDir.path, cacheImageFolderName));
+      final thumbDir = Directory(p.join(tempDir.path, 'libCachedImageData'));
+      await viewerDir.create(recursive: true);
+      await thumbDir.create(recursive: true);
+
+      // 50 MB in cacheimage + 50 MB in libCachedImageData + 20 MB recent .tmp = 120 MB (> 100 MB)
+      final now = DateTime.now();
+      for (var i = 0; i < 5; i++) {
+        final vf = File(p.join(viewerDir.path, 'v_$i.bin'));
+        await vf.writeAsBytes(List.filled(10 * 1024 * 1024, i));
+        await vf.setLastModified(now.subtract(Duration(minutes: 50 - i)));
+
+        final tf = File(p.join(thumbDir.path, 't_$i.bin'));
+        await tf.writeAsBytes(List.filled(10 * 1024 * 1024, i));
+        await tf.setLastModified(now.subtract(Duration(minutes: 50 - i)));
+      }
+      final recentTmp = File(p.join(tempDir.path, 'recent_dl.tmp'));
+      await recentTmp.writeAsBytes(List.filled(20 * 1024 * 1024, 9));
+
+      await AppCacheManager.enforceBudgetInDirForTest(tempDir);
+
+      int dirBytes(Directory d) => d
+          .listSync(recursive: true)
+          .whereType<File>()
+          .fold<int>(0, (sum, f) => sum + f.lengthSync());
+
+      final total = dirBytes(viewerDir) + dirBytes(thumbDir) + recentTmp.lengthSync();
+      expect(total, lessThanOrEqualTo(AppCacheManager.maxTotalDiskCacheBytes));
+    } finally {
+      if (await tempDir.exists()) await tempDir.delete(recursive: true);
     }
   });
 }

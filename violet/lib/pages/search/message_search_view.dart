@@ -9,9 +9,12 @@ import 'package:flutter/material.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:violet/component/hangul_auto_restorer.dart';
 import 'package:violet/component/hentai.dart';
+import 'package:violet/component/hitomi/displayed_tag.dart';
 import 'package:violet/component/hitomi/hitomi.dart';
 import 'package:violet/component/hitomi/hybrid_loader.dart';
 import 'package:violet/component/hitomi/message_corpus_manager.dart';
+import 'package:violet/component/index.dart';
+import 'package:violet/component/local_article_filter.dart';
 import 'package:violet/database/query.dart';
 import 'package:violet/pages/common/toast.dart';
 import 'package:violet/pages/common/utils.dart';
@@ -64,6 +67,15 @@ class _MessageSearchViewState extends State<MessageSearchView> {
   final Map<int, Future<Map<String, String>>> _headerFutures =
       <int, Future<Map<String, String>>>{};
   String? _statusMessage;
+
+  List<(DisplayedTag, int)> _conditionSuggestions = const [];
+  Timer? _conditionDebounce;
+  int _conditionTokenStart = 0;
+  int _conditionTokenEnd = 0;
+  String _conditionActiveToken = '';
+  bool _conditionHasNegative = false;
+  bool _showConditionSuggestions = false;
+  int _conditionReqId = 0;
 
   Future<ImageList> _getImageListCached(int articleId) {
     return _imageListFutures.putIfAbsent(
@@ -126,6 +138,441 @@ class _MessageSearchViewState extends State<MessageSearchView> {
     _viewMode = Settings.messageSearchGridMode.value
         ? DialogueViewMode.grid
         : DialogueViewMode.detail;
+    _conditionFocusNode.addListener(_onConditionFocusChanged);
+  }
+
+  static const List<(String, String)> _conditionPrefixes = [
+    ('female', '여성 태그'),
+    ('male', '남성 태그'),
+    ('tag', '일반 태그'),
+    ('artist', '작가'),
+    ('group', '그룹'),
+    ('series', '시리즈'),
+    ('character', '캐릭터'),
+    ('uploader', '업로더'),
+    ('type', '종류'),
+    ('page', '페이지'),
+    ('id', '작품번호'),
+    ('date', '날짜'),
+  ];
+
+  static bool _isTokenBoundary(String ch) =>
+      ch == ' ' || ch == '\t' || ch == '\n' || ch == '(' || ch == ')';
+
+  void _scheduleConditionSuggestions() {
+    setState(() {
+      _showConditionSuggestions = true;
+    });
+    _conditionDebounce?.cancel();
+    _conditionDebounce = Timer(
+      const Duration(milliseconds: 110),
+      () => unawaited(_updateConditionSuggestions()),
+    );
+  }
+
+  Future<void> _updateConditionSuggestions() async {
+    if (!mounted) return;
+    final text = _conditionController.text;
+    final sel = _conditionController.selection;
+    final rawOffset = sel.baseOffset;
+    final cursor =
+        (rawOffset >= 0 && rawOffset <= text.length) ? rawOffset : text.length;
+
+    var start = cursor;
+    while (start > 0 && !_isTokenBoundary(text[start - 1])) {
+      start--;
+    }
+    var end = cursor;
+    while (end < text.length && !_isTokenBoundary(text[end])) {
+      end++;
+    }
+
+    final rawToken = text.substring(start, end);
+    final hasNegative = rawToken.startsWith('-');
+    final coreToken = hasNegative ? rawToken.substring(1) : rawToken;
+    final reqId = ++_conditionReqId;
+
+    _conditionTokenStart = start;
+    _conditionTokenEnd = end;
+    _conditionHasNegative = hasNegative;
+    _conditionActiveToken = coreToken;
+
+    if (coreToken.trim().isEmpty) {
+      if (!mounted || reqId != _conditionReqId) return;
+      setState(() {
+        _conditionSuggestions = _conditionPrefixes
+            .map(
+              (p) => (
+                DisplayedTag(group: 'prefix', name: p.$1, translated: p.$2),
+                0,
+              ),
+            )
+            .toList();
+      });
+      return;
+    }
+
+    var effectiveToken = coreToken.trim();
+    final analyzedTypo = Settings.enableHangulTypoRestore.value
+        ? HangulAutoRestorer.analyzeToken(effectiveToken)
+        : null;
+
+    final result = <(DisplayedTag, int)>[];
+    final seenTags = <String>{};
+
+    void addUnique((DisplayedTag, int) item) {
+      final k = item.$1.getTag();
+      if (seenTags.add(k)) {
+        result.add(item);
+      }
+    }
+
+    if (analyzedTypo != null) {
+      if (analyzedTypo.restoredExpression != null &&
+          (analyzedTypo.restoredExpression!.contains('>') ||
+              analyzedTypo.restoredExpression!.contains('<') ||
+              analyzedTypo.restoredExpression!.contains('='))) {
+        addUnique((
+          DisplayedTag(
+            group: analyzedTypo.normalizedPrefix ?? 'prefix',
+            name: analyzedTypo.restoredExpression!.replaceFirst(
+              analyzedTypo.normalizedPrefix ?? '',
+              '',
+            ),
+            translated: '오타 복원: ${analyzedTypo.restoredExpression}',
+          ),
+          0,
+        ));
+      } else if (analyzedTypo.normalizedPrefix != null &&
+          analyzedTypo.restoredExpression != null) {
+        effectiveToken = analyzedTypo.restoredExpression!;
+      }
+    }
+
+    final lowerEff = effectiveToken.toLowerCase();
+    if (lowerEff == 'page') {
+      for (final op in const ['>', '>=', '<', '<=', '=']) {
+        addUnique((DisplayedTag(group: 'page', name: op), 0));
+      }
+    } else if (lowerEff == 'id') {
+      for (final op in const ['1000000~2000000', '>=', '<=', '>', '<', '=']) {
+        addUnique((DisplayedTag(group: 'id', name: op), 0));
+      }
+    } else if (lowerEff == 'date') {
+      for (final op in const [
+        '2024-01-01~2026-12-31',
+        '2023~2026',
+        '>=',
+        '<=',
+      ]) {
+        addUnique((DisplayedTag(group: 'date', name: op), 0));
+      }
+    }
+
+    if (!effectiveToken.contains(':') &&
+        !effectiveToken.contains('>') &&
+        !effectiveToken.contains('<') &&
+        !effectiveToken.contains('=')) {
+      for (final p in _conditionPrefixes) {
+        if (p.$1.startsWith(lowerEff) || p.$2.contains(effectiveToken)) {
+          addUnique((
+            DisplayedTag(group: 'prefix', name: p.$1, translated: p.$2),
+            0,
+          ));
+        }
+      }
+    }
+
+    // 1) 동기 메모리/번역 사전 매칭 즉시 표시 (네트워크 카탈로그 대기 없이 0ms 반응)
+    final colonIdx = effectiveToken.indexOf(':');
+    if (colonIdx > 0) {
+      final g = effectiveToken.substring(0, colonIdx).trim().toLowerCase();
+      final v = effectiveToken.substring(colonIdx + 1).trim();
+      final syncMatches = HentaiIndex.searchTagsSync(v);
+      for (final m in syncMatches) {
+        if (result.length >= 35) break;
+        final mg = (m.$1.group ?? '').toLowerCase();
+        if (mg == g || (g == 'tag' && (mg == 'female' || mg == 'male'))) {
+          addUnique(m);
+        }
+      }
+    } else {
+      final syncMatches = HentaiIndex.searchTagsSync(effectiveToken);
+      for (final m in syncMatches) {
+        if (result.length >= 35) break;
+        addUnique(m);
+      }
+    }
+
+    if (!mounted || reqId != _conditionReqId) return;
+    if (result.isNotEmpty) {
+      setState(() {
+        _conditionSuggestions = result.take(35).toList();
+      });
+    }
+
+    // 2) 비동기 카탈로그/DB 인덱스 보충
+    try {
+      await HentaiIndex.loadCountMapIfRequired();
+      final matches = Settings.searchUseFuzzy.value
+          ? await HentaiIndex.queryAutoCompleteFuzzy(
+              effectiveToken,
+              Settings.searchUseTranslated.value,
+            )
+          : await HentaiIndex.queryAutoComplete(
+              effectiveToken,
+              Settings.searchUseTranslated.value,
+            );
+      for (final m in matches) {
+        if (result.length >= 35) break;
+        addUnique(m);
+      }
+    } catch (_) {}
+
+    if (!mounted || reqId != _conditionReqId) return;
+    setState(() {
+      _conditionSuggestions = result.take(35).toList();
+    });
+  }
+
+  void _applyConditionSuggestion((DisplayedTag, int) info) {
+    final text = _conditionController.text;
+    final start = _conditionTokenStart.clamp(0, text.length);
+    final end = _conditionTokenEnd.clamp(start, text.length);
+    final negPrefix = _conditionHasNegative ? '-' : '';
+    final tag = info.$1;
+
+    String insertText;
+    bool appendSpace;
+    if (tag.group == 'prefix') {
+      final name = tag.name ?? '';
+      final noColon = name == 'page' || name == 'random';
+      insertText = '$negPrefix$name${noColon ? '' : ':'}';
+      appendSpace = name == 'random';
+    } else if ((tag.group == 'page' || tag.group == 'id' || tag.group == 'date') &&
+        (tag.name != null &&
+            (tag.name!.startsWith('>') ||
+                tag.name!.startsWith('<') ||
+                tag.name!.startsWith('=')))) {
+      insertText = '$negPrefix${tag.group}${tag.name}';
+      appendSpace = false;
+    } else {
+      insertText = '$negPrefix${tag.getTag().replaceAll(' ', '_')}';
+      appendSpace = true;
+    }
+
+    final after = text.substring(end);
+    if (appendSpace && (after.isEmpty || !after.startsWith(' '))) {
+      insertText = '$insertText ';
+    }
+
+    final nextText = text.substring(0, start) + insertText + after;
+    final nextOffset = start + insertText.length;
+
+    _conditionController.value = TextEditingValue(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: nextOffset),
+    );
+    if (!_conditionFocusNode.hasFocus && _conditionFocusNode.canRequestFocus) {
+      _conditionFocusNode.requestFocus();
+    }
+    setState(() {
+      _showConditionSuggestions = true;
+    });
+    unawaited(_updateConditionSuggestions());
+  }
+
+  static Color _tagGroupColor(String? group) {
+    switch (group) {
+      case 'female':
+        return Colors.pink;
+      case 'male':
+        return Colors.blue;
+      case 'prefix':
+      case 'type':
+      case 'page':
+        return Colors.orange.shade700;
+      case 'lang':
+      case 'language':
+        return Colors.teal;
+      case 'series':
+        return Colors.cyan.shade700;
+      case 'character':
+        return Colors.indigo;
+      case 'artist':
+      case 'group':
+        return Colors.green.shade700;
+      case 'uploader':
+        return Colors.deepPurple;
+      default:
+        return Colors.grey.shade700;
+    }
+  }
+
+  Widget _buildSuggestionChip((DisplayedTag, int) item) {
+    final tag = item.$1;
+    final count = item.$2;
+    final color = _tagGroupColor(tag.group);
+    final groupBadge = (tag.group?.isNotEmpty ?? false)
+        ? tag.group![0].toUpperCase()
+        : 'T';
+    final isPrefix = tag.group == 'prefix';
+    final rawName = isPrefix
+        ? '${tag.name}${(tag.name == 'page' || tag.name == 'random') ? '' : ':'}'
+        : tag.getTag();
+    final trans = isPrefix
+        ? (tag.translated ?? '')
+        : (tag.name != null ? tag.getTranslated() : '');
+    final showTrans = trans.isNotEmpty &&
+        trans.toLowerCase() != (tag.name ?? '').toLowerCase();
+    final labelText = showTrans
+        ? (isPrefix ? '$rawName ($trans)' : '$rawName · $trans')
+        : rawName;
+    final negMark = _conditionHasNegative && !isPrefix ? '-' : '';
+    final countText = count > 0 ? ' (${_formatCount(count)})' : '';
+
+    return Material(
+      color: color,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        canRequestFocus: false,
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => _applyConditionSuggestion(item),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 16,
+                height: 16,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.25),
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  groupBadge,
+                  style: const TextStyle(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 230),
+                child: Text(
+                  '$negMark$labelText$countText',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConditionSuggestionPanel(bool isDark, Color accent) {
+    final bgColor = isDark
+        ? Colors.grey.shade800.withValues(alpha: 0.72)
+        : Colors.grey.shade100;
+    final borderColor = isDark ? Colors.grey.shade700 : Colors.grey.shade300;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 6),
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.auto_awesome, size: 13, color: accent),
+              const SizedBox(width: 4),
+              Text(
+                _conditionActiveToken.trim().isEmpty
+                    ? '필터 접두사 선택'
+                    : '필터 태그 자동완성 (${_conditionSuggestions.length})',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+                ),
+              ),
+              if (_conditionHasNegative) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    '제외(-)',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.redAccent,
+                    ),
+                  ),
+                ),
+              ],
+              const Spacer(),
+              InkWell(
+                canRequestFocus: false,
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => setState(() => _showConditionSuggestions = false),
+                child: Padding(
+                  padding: const EdgeInsets.all(2),
+                  child: Icon(
+                    Icons.close,
+                    size: 14,
+                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 142),
+            child: SingleChildScrollView(
+              child: Wrap(
+                spacing: 5,
+                runSpacing: 5,
+                children:
+                    _conditionSuggestions.map(_buildSuggestionChip).toList(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _onConditionFocusChanged() {
+    if (!mounted) return;
+    if (_conditionFocusNode.hasFocus) {
+      setState(() => _showConditionSuggestions = true);
+      unawaited(_updateConditionSuggestions());
+    } else {
+      setState(() => _showConditionSuggestions = false);
+    }
   }
 
   void _setViewMode(DialogueViewMode mode) {
@@ -140,6 +587,8 @@ class _MessageSearchViewState extends State<MessageSearchView> {
   @override
   void dispose() {
     _pollTimer?.cancel();
+    _conditionDebounce?.cancel();
+    _conditionFocusNode.removeListener(_onConditionFocusChanged);
     _dialogueFocusNode.dispose();
     _conditionFocusNode.dispose();
     _dialogueController.dispose();
@@ -210,6 +659,84 @@ class _MessageSearchViewState extends State<MessageSearchView> {
     }
   }
 
+  Future<List<rust_msg.MobileMessageHit>> _filterHitsByPostCondition(
+    List<rust_msg.MobileMessageHit> hits,
+    String postCondition,
+  ) async {
+    if (hits.isEmpty) return hits;
+    final lowerCond = postCondition.toLowerCase();
+    final needsPageCount = lowerCond.contains('page');
+
+    final uniqueIds = hits.map((h) => h.articleId).toSet().toList();
+    final missingIds =
+        uniqueIds.where((id) => !_articleCache.containsKey(id)).toList();
+
+    if (missingIds.isNotEmpty) {
+      try {
+        final cached = await HybridLoader.getCachedMetadataBatch(missingIds);
+        _articleCache.addAll(cached);
+      } catch (_) {}
+    }
+
+    final toFetch = uniqueIds.where((id) {
+      final qr = _articleCache[id];
+      if (qr == null) return true;
+      if (needsPageCount && LocalArticleFilter.extractPageCount(qr) == null) {
+        return true;
+      }
+      return false;
+    }).toList();
+
+    const batchSize = 12;
+    for (var i = 0; i < toFetch.length; i += batchSize) {
+      final end = math.min(i + batchSize, toFetch.length);
+      final chunk = toFetch.sublist(i, end);
+      await Future.wait(
+        chunk.map((id) async {
+          try {
+            var qr = _articleCache[id];
+            if (qr == null) {
+              final fast = await HybridLoader.idQueryHitomiFast(id)
+                  .timeout(const Duration(seconds: 3));
+              if (fast.result.length > 1) {
+                qr = fast;
+              }
+            }
+            if (needsPageCount &&
+                (qr == null ||
+                    LocalArticleFilter.extractPageCount(qr) == null)) {
+              final info = await HentaiManager.tryFetchHitomiGalleryInfo(id)
+                  .timeout(const Duration(seconds: 3));
+              if (info.isNotEmpty) {
+                final merged = Map<String, dynamic>.from(
+                  qr?.result ?? <String, dynamic>{'Id': id},
+                );
+                for (final e in info.entries) {
+                  if (e.value != null) merged[e.key] = e.value;
+                }
+                qr = QueryResult(result: merged);
+              }
+            }
+            if (qr != null && qr.result.length > 1) {
+              _articleCache[id] = qr;
+              HybridLoader.cacheMetadata(qr);
+            }
+          } catch (_) {}
+        }),
+      );
+    }
+
+    final allowedIds = <int>{};
+    for (final id in uniqueIds) {
+      final qr = _articleCache[id];
+      if (qr == null) continue;
+      if (LocalArticleFilter.filter([qr], postCondition).isNotEmpty) {
+        allowedIds.add(id);
+      }
+    }
+    return hits.where((h) => allowedIds.contains(h.articleId)).toList();
+  }
+
   Future<void> _runSearch({
     bool resetTake = true,
     bool sortSwitchOnly = false,
@@ -224,7 +751,16 @@ class _MessageSearchViewState extends State<MessageSearchView> {
     }
 
     final query = _dialogueController.text.trim();
-    if (query.isEmpty) return;
+    if (query.isEmpty) {
+      showToast(
+        level: ToastLevel.warning,
+        message: '검색할 대사를 입력해 주세요.',
+      );
+      if (_dialogueFocusNode.canRequestFocus) {
+        _dialogueFocusNode.requestFocus();
+      }
+      return;
+    }
 
     if (resetTake) {
       _take = _pageStep;
@@ -243,11 +779,25 @@ class _MessageSearchViewState extends State<MessageSearchView> {
 
     try {
       List<int>? whitelistIds = widget.scopedArticleIds;
+      int? idMin;
+      int? idMax;
+      Set<int> excludedIds = const <int>{};
+      String? postFilterCondition;
+
       if (whitelistIds == null && _conditionController.text.trim().isNotEmpty) {
-        whitelistIds = await mgr.resolveArticleWhitelist(
+        final filterRes = await mgr.resolveArticleFilter(
           _conditionController.text.trim(),
         );
-        if (whitelistIds != null && whitelistIds.isEmpty) {
+        if (!mounted) return;
+        if (filterRes.errorMessage != null) {
+          setState(() {
+            _hits = const [];
+            _totalMatched = 0;
+            _statusMessage = filterRes.errorMessage;
+          });
+          return;
+        }
+        if (filterRes.isEmptyMatch) {
           setState(() {
             _hits = const [];
             _totalMatched = 0;
@@ -255,25 +805,56 @@ class _MessageSearchViewState extends State<MessageSearchView> {
           });
           return;
         }
+        whitelistIds = filterRes.whitelistIds;
+        idMin = filterRes.idMin;
+        idMax = filterRes.idMax;
+        excludedIds = filterRes.excludedIds;
+        postFilterCondition = filterRes.postFilterCondition;
       }
+
+      final needsPostFilter =
+          postFilterCondition != null || excludedIds.isNotEmpty;
+      final requestTake =
+          needsPostFilter ? math.max(_take, 2000).clamp(1, _maxTake) : _take;
 
       final res = await mgr.searchGlobalEx(
         query: query,
         mode: _mode,
         sortMode: _sortMode,
-        take: _take,
+        take: requestTake,
         whitelistIds: whitelistIds,
+        idMin: idMin,
+        idMax: idMax,
       );
+
+      var finalHits = res.hits;
+      var finalTotalMatched = res.totalMatched.toInt();
+
+      if (excludedIds.isNotEmpty) {
+        finalHits =
+            finalHits.where((h) => !excludedIds.contains(h.articleId)).toList();
+        finalTotalMatched = finalHits.length;
+      }
+
+      if (postFilterCondition != null && finalHits.isNotEmpty) {
+        finalHits =
+            await _filterHitsByPostCondition(finalHits, postFilterCondition);
+        finalTotalMatched = finalHits.length;
+      }
+
+      if (finalHits.length > _take) {
+        finalHits = finalHits.sublist(0, _take);
+      }
 
       if (!mounted) return;
       setState(() {
-        _totalMatched = res.totalMatched.toInt();
-        _hits = res.hits;
-        if (res.hits.isEmpty) {
+        _totalMatched = finalTotalMatched;
+        _hits = finalHits;
+        if (finalHits.isEmpty) {
           _statusMessage = '일치하는 대사를 찾지 못했습니다.';
         }
       });
-      unawaited(_resolveHitArticles(res.hits));
+      unawaited(_resolveHitArticles(finalHits));
     } catch (e) {
       if (!mounted) return;
       final msg = e.toString();
@@ -525,6 +1106,13 @@ class _MessageSearchViewState extends State<MessageSearchView> {
               focusNode: _conditionFocusNode,
               canRequestFocus: _suppressInputFocusCount == 0,
               textInputAction: TextInputAction.search,
+              onTap: () {
+                if (!_showConditionSuggestions) {
+                  setState(() => _showConditionSuggestions = true);
+                }
+                unawaited(_updateConditionSuggestions());
+              },
+              onChanged: (_) => _scheduleConditionSuggestions(),
               onSubmitted: (_) => _runSearch(),
               style: const TextStyle(fontSize: 12.5),
               decoration: InputDecoration(
@@ -534,12 +1122,27 @@ class _MessageSearchViewState extends State<MessageSearchView> {
                   vertical: 8,
                 ),
                 prefixIcon: const Icon(Icons.tune, size: 17),
+                suffixIcon: _conditionController.text.isNotEmpty
+                    ? IconButton(
+                        tooltip: '조건 지우기',
+                        icon: const Icon(Icons.clear, size: 16),
+                        onPressed: () {
+                          _conditionController.clear();
+                          setState(() {});
+                          if (_conditionFocusNode.hasFocus) {
+                            unawaited(_updateConditionSuggestions());
+                          }
+                        },
+                      )
+                    : null,
                 hintText: '작품 조건 (예: artist:이름 female:elf page>30)',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
             ),
+            if (_showConditionSuggestions && _conditionSuggestions.isNotEmpty)
+              _buildConditionSuggestionPanel(isDark, accent),
           ],
           const SizedBox(height: 6),
           SingleChildScrollView(

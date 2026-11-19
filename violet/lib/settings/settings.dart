@@ -472,6 +472,7 @@ class Settings {
     'lastSearchIsHitomiOnly',
     false,
   );
+  static final lastSearchMainPage = SettingItem<int>('lastSearchMainPage', 1);
 
   static late String userAppId;
 

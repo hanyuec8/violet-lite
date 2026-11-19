@@ -407,7 +407,10 @@ class _GroupArticleListPageState extends State<GroupArticleListPage> {
         FloatingActionButton(
           onPressed: () {
             for (var element in filterResult) {
-              checked.add(element.id());
+              final id = element.id();
+              if (!checked.contains(id)) {
+                checked.add(id);
+              }
             }
             _shouldRebuild = true;
             setState(() {
@@ -681,7 +684,9 @@ class _GroupArticleListPageState extends State<GroupArticleListPage> {
 
   void check(int article, bool check) {
     if (check) {
-      checked.add(article);
+      if (!checked.contains(article)) {
+        checked.add(article);
+      }
     } else {
       checked.removeWhere((element) => element == article);
       if (checked.isEmpty) {

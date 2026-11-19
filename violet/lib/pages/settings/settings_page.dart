@@ -897,6 +897,7 @@ class _CacheManageTileState extends State<_CacheManageTile> {
   }
 
   Future<void> _refreshSize() async {
+    await AppCacheManager.enforceBudget();
     final bytes = await AppCacheManager.calculateCacheSizeBytes();
     if (mounted) {
       setState(() => _cacheBytes = bytes);

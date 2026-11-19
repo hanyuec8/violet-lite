@@ -1,7 +1,11 @@
 // This source code is a part of Project Violet.
 // Copyright (C) 2020-2026. violet-team. Licensed under the Apache-2.0 License.
 
-import 'dart:typed_data';
+import 'dart:convert';
+import 'dart:math' as math;
+
+import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:violet/network/wrapper.dart' as http;
 import 'package:violet/log/log.dart';
 import 'package:violet/src/rust/api/nozomi.dart' as rust_nozomi;
@@ -59,6 +63,89 @@ class HitomiNozomi {
 
   /// Nozomi URL -> 총 작품 수 인메모리 캐시
   static final Map<String, int> _totalCountCache = <String, int>{};
+
+  /// Nozomi URL -> 전체 갤러리 ID 목록 인메모리 LRU 캐시 (최대 40개)
+  static final Map<String, List<int>> _fullNozomiCache = <String, List<int>>{};
+  static const int _maxFullCacheEntries = 40;
+
+  /// galleriesindex B-Tree 캐시
+  static String? _galleriesIndexVersion;
+  static DateTime? _galleriesVersionFetchedAt;
+  static final Map<String, HitomiBTreeNode> _btreeNodeCache =
+      <String, HitomiBTreeNode>{};
+  static final Map<String, List<int>> _titleWordCache = <String, List<int>>{};
+
+  @visibleForTesting
+  static Future<List<int>> Function(String nozomiUrl)? testFetchAllOverride;
+
+  @visibleForTesting
+  static Future<List<int>> Function(String term)? testTitleWordOverride;
+
+  @visibleForTesting
+  static void clearCaches() {
+    _totalCountCache.clear();
+    _fullNozomiCache.clear();
+    _galleriesIndexVersion = null;
+    _galleriesVersionFetchedAt = null;
+    _btreeNodeCache.clear();
+    _titleWordCache.clear();
+  }
+
+  /// 특정 Nozomi URL에서 전체 갤러리 ID 목록을 가져옵니다 (캐시 우선).
+  static Future<List<int>> fetchAllGalleryIds(
+    String nozomiUrl, {
+    Duration timeout = const Duration(seconds: 8),
+    bool throwOnError = false,
+  }) async {
+    if (testFetchAllOverride != null) {
+      return await testFetchAllOverride!(nozomiUrl);
+    }
+
+    final cached = _fullNozomiCache.remove(nozomiUrl);
+    if (cached != null) {
+      _fullNozomiCache[nozomiUrl] = cached;
+      return cached;
+    }
+
+    try {
+      final response = await http.get(
+        nozomiUrl,
+        headers: {
+          'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Referer': 'https://hitomi.la/',
+        },
+      ).timeout(timeout);
+
+      if (response.statusCode == 200 || response.statusCode == 206) {
+        final ids = parseNozomiBytes(Uint8List.fromList(response.bodyBytes));
+        _totalCountCache[nozomiUrl] = ids.length;
+        if (_fullNozomiCache.length >= _maxFullCacheEntries) {
+          _fullNozomiCache.remove(_fullNozomiCache.keys.first);
+        }
+        _fullNozomiCache[nozomiUrl] = ids;
+        return ids;
+      } else if (response.statusCode == 404) {
+        _totalCountCache[nozomiUrl] = 0;
+        if (_fullNozomiCache.length >= _maxFullCacheEntries) {
+          _fullNozomiCache.remove(_fullNozomiCache.keys.first);
+        }
+        _fullNozomiCache[nozomiUrl] = const <int>[];
+        return const <int>[];
+      } else {
+        Logger.warning(
+          '[HitomiNozomi] Non-success full request (${response.statusCode}): $nozomiUrl',
+        );
+        if (throwOnError) {
+          throw Exception('HTTP ${response.statusCode}');
+        }
+      }
+    } catch (e, st) {
+      Logger.error('[HitomiNozomi] Exception during full request: $e\n$st');
+      if (throwOnError) rethrow;
+    }
+    return const <int>[];
+  }
 
   /// 특정 Nozomi URL에서 시작 인덱스(0부터 시작하는 갤러리 번호)와 개수를 지정하여 ID 목록을 가져옵니다.
   static Future<List<int>> fetchGalleryIdsByOffset(
@@ -271,6 +358,12 @@ class HitomiNozomi {
     return 'https://$domain/uploader/$clean-$language.nozomi';
   }
 
+  /// 작품 종류(type: doujinshi, manga, artistcg, gamecg, imageset, anime)별 목록 URL 생성
+  static String getTypeIndexUrl(String type, [String language = 'all']) {
+    final clean = cleanTerm(type.toLowerCase());
+    return 'https://$domain/type/$clean-$language.nozomi';
+  }
+
   /// 특정 태그별 작품 목록 URL 생성 (예: 'female:big breasts' -> 'tag/female:big%20breasts-all.nozomi')
   static String getTagIndexUrl(String tag, [String language = 'all']) {
     var raw = tag.trim();
@@ -387,4 +480,263 @@ class HitomiNozomi {
       language: language,
     );
   }
+
+  // ---------------------------------------------------------------------------
+  // Hitomi 공식 galleriesindex B-Tree 제목 단어 검색 (search.js 1:1 호환)
+  // ---------------------------------------------------------------------------
+
+  static const int _btreeNodeSize = 464;
+  static const int _btreeOrder = 16;
+
+  static Uint8List hashSearchTerm(String term) {
+    final normalized = term.trim().replaceAll('_', ' ').toLowerCase();
+    final digest = sha256.convert(utf8.encode(normalized));
+    return Uint8List.fromList(digest.bytes.sublist(0, 4));
+  }
+
+  static int _compareBytes(Uint8List a, Uint8List b) {
+    final len = math.min(a.length, b.length);
+    for (var i = 0; i < len; i++) {
+      if (a[i] < b[i]) return -1;
+      if (a[i] > b[i]) return 1;
+    }
+    return 0;
+  }
+
+  @visibleForTesting
+  static HitomiBTreeNode? decodeBTreeNode(Uint8List data) {
+    if (data.length < 8) return null;
+    final bd = ByteData.sublistView(data);
+    var pos = 0;
+
+    final numKeys = bd.getInt32(pos, Endian.big);
+    pos += 4;
+    if (numKeys < 0 || numKeys > _btreeOrder) return null;
+
+    final keys = <Uint8List>[];
+    for (var i = 0; i < numKeys; i++) {
+      if (pos + 4 > data.length) return null;
+      final keySize = bd.getInt32(pos, Endian.big);
+      pos += 4;
+      if (keySize <= 0 || keySize > 32 || pos + keySize > data.length) {
+        return null;
+      }
+      keys.add(data.sublist(pos, pos + keySize));
+      pos += keySize;
+    }
+
+    if (pos + 4 > data.length) return null;
+    final numDatas = bd.getInt32(pos, Endian.big);
+    pos += 4;
+    if (numDatas < 0 || numDatas > _btreeOrder) return null;
+
+    final datas = <(int offset, int length)>[];
+    for (var i = 0; i < numDatas; i++) {
+      if (pos + 12 > data.length) return null;
+      final offset = bd.getUint64(pos, Endian.big);
+      pos += 8;
+      final length = bd.getInt32(pos, Endian.big);
+      pos += 4;
+      datas.add((offset, length));
+    }
+
+    final subnodes = <int>[];
+    for (var i = 0; i < _btreeOrder + 1; i++) {
+      if (pos + 8 > data.length) break;
+      subnodes.add(bd.getUint64(pos, Endian.big));
+      pos += 8;
+    }
+
+    return HitomiBTreeNode(keys: keys, datas: datas, subnodeAddresses: subnodes);
+  }
+
+  static Future<String?> _getGalleriesIndexVersion() async {
+    final now = DateTime.now();
+    if (_galleriesIndexVersion != null &&
+        _galleriesVersionFetchedAt != null &&
+        now.difference(_galleriesVersionFetchedAt!) <
+            const Duration(minutes: 15)) {
+      return _galleriesIndexVersion;
+    }
+    try {
+      final res = await http.get(
+        'https://$domain/galleriesindex/version?_=${now.millisecondsSinceEpoch}',
+        headers: {
+          'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Referer': 'https://hitomi.la/',
+        },
+      ).timeout(const Duration(seconds: 4));
+      if (res.statusCode == 200) {
+        final ver = res.body.trim();
+        if (ver.isNotEmpty) {
+          _galleriesIndexVersion = ver;
+          _galleriesVersionFetchedAt = now;
+          return ver;
+        }
+      }
+    } catch (e) {
+      Logger.warning('[HitomiNozomi] galleriesindex version error: $e');
+    }
+    return _galleriesIndexVersion;
+  }
+
+  static Future<HitomiBTreeNode?> _getBTreeNode(
+    String version,
+    int address,
+  ) async {
+    final cacheKey = '$version:$address';
+    final cached = _btreeNodeCache[cacheKey];
+    if (cached != null) return cached;
+
+    try {
+      final url = 'https://$domain/galleriesindex/galleries.$version.index';
+      final end = address + _btreeNodeSize - 1;
+      final res = await http.get(
+        url,
+        headers: {
+          'Range': 'bytes=$address-$end',
+          'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Referer': 'https://hitomi.la/',
+        },
+      ).timeout(const Duration(seconds: 4));
+      if (res.statusCode == 206 || res.statusCode == 200) {
+        final node = decodeBTreeNode(Uint8List.fromList(res.bodyBytes));
+        if (node != null) {
+          if (_btreeNodeCache.length >= 256) {
+            _btreeNodeCache.remove(_btreeNodeCache.keys.first);
+          }
+          _btreeNodeCache[cacheKey] = node;
+        }
+        return node;
+      }
+    } catch (e) {
+      Logger.warning('[HitomiNozomi] B-Tree node fetch error ($address): $e');
+    }
+    return null;
+  }
+
+  /// Hitomi 공식 `galleriesindex` B-Tree에서 제목 단어에 매칭되는 갤러리 ID 목록(최신순)을 조회합니다.
+  static Future<List<int>> searchTitleWordGalleryIds(
+    String term, {
+    String language = 'all',
+  }) async {
+    var clean = term.trim().replaceAll('_', ' ').toLowerCase();
+    clean = clean.replaceAll(RegExp(r'''^["']+|["']+$'''), '').trim();
+    if (clean.isEmpty) return const <int>[];
+
+    List<int> rawIds;
+    if (testTitleWordOverride != null) {
+      rawIds = List<int>.from(await testTitleWordOverride!(clean));
+    } else {
+      final ver = await _getGalleriesIndexVersion();
+      if (ver == null || ver.isEmpty) return const <int>[];
+
+      final cacheKey = '$ver:$clean';
+      final cached = _titleWordCache.remove(cacheKey);
+      if (cached != null) {
+        _titleWordCache[cacheKey] = cached;
+        rawIds = cached;
+      } else {
+        rawIds = await _lookupBTreeGalleryIds(ver, clean);
+        if (_titleWordCache.length >= 50) {
+          _titleWordCache.remove(_titleWordCache.keys.first);
+        }
+        _titleWordCache[cacheKey] = rawIds;
+      }
+    }
+
+    if (rawIds.isEmpty) return const <int>[];
+    final sorted = List<int>.from(rawIds)..sort((a, b) => b.compareTo(a));
+
+    if (language != 'all' && language.trim().isNotEmpty) {
+      final langIds = await fetchAllGalleryIds(getLanguageIndexUrl(language));
+      if (langIds.isEmpty) return const <int>[];
+      final langSet = langIds.toSet();
+      return sorted.where(langSet.contains).toList();
+    }
+    return sorted;
+  }
+
+  static Future<List<int>> _lookupBTreeGalleryIds(
+    String version,
+    String term,
+  ) async {
+    final key = hashSearchTerm(term);
+    var address = 0;
+
+    for (var depth = 0; depth < 16; depth++) {
+      final node = await _getBTreeNode(version, address);
+      if (node == null || node.keys.isEmpty) return const <int>[];
+
+      var where = 0;
+      var found = false;
+      for (var i = 0; i < node.keys.length; i++) {
+        final cmp = _compareBytes(key, node.keys[i]);
+        if (cmp <= 0) {
+          where = i;
+          if (cmp == 0) found = true;
+          break;
+        }
+        where = i + 1;
+      }
+
+      if (found) {
+        if (where >= node.datas.length) return const <int>[];
+        final (offset, length) = node.datas[where];
+        if (length <= 0 || length > 100000000) return const <int>[];
+        try {
+          final dataUrl =
+              'https://$domain/galleriesindex/galleries.$version.data';
+          final res = await http.get(
+            dataUrl,
+            headers: {
+              'Range': 'bytes=$offset-${offset + length - 1}',
+              'User-Agent':
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+              'Referer': 'https://hitomi.la/',
+            },
+          ).timeout(const Duration(seconds: 6));
+          if (res.statusCode == 206 || res.statusCode == 200) {
+            final bytes = Uint8List.fromList(res.bodyBytes);
+            if (bytes.length < 4) return const <int>[];
+            final bd = ByteData.sublistView(bytes);
+            final count = bd.getInt32(0, Endian.big);
+            if (count <= 0 || count > 10000000) return const <int>[];
+            final ids = <int>[];
+            for (var i = 0; i < count && 4 + (i + 1) * 4 <= bytes.length; i++) {
+              ids.add(bd.getInt32(4 + i * 4, Endian.big));
+            }
+            return ids;
+          }
+        } catch (e) {
+          Logger.warning('[HitomiNozomi] B-Tree data fetch error: $e');
+        }
+        return const <int>[];
+      }
+
+      if (node.isLeaf || where >= node.subnodeAddresses.length) {
+        return const <int>[];
+      }
+      final nextAddr = node.subnodeAddresses[where];
+      if (nextAddr == 0) return const <int>[];
+      address = nextAddr;
+    }
+    return const <int>[];
+  }
+}
+
+class HitomiBTreeNode {
+  final List<Uint8List> keys;
+  final List<(int offset, int length)> datas;
+  final List<int> subnodeAddresses;
+
+  const HitomiBTreeNode({
+    required this.keys,
+    required this.datas,
+    required this.subnodeAddresses,
+  });
+
+  bool get isLeaf => subnodeAddresses.every((a) => a == 0);
 }

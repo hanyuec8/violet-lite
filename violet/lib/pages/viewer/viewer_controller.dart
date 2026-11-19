@@ -255,6 +255,7 @@ class ViewerController extends GetxController {
         Logger.error('[precache-error] E: $error\n$stackTrace');
       },
     );
+    AppCacheManager.scheduleEnforceBudget();
   }
 
   middleButton() {
