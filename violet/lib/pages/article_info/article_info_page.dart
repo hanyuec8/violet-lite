@@ -8,7 +8,11 @@ import 'package:expandable/expandable.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
+import 'package:violet/database/user/download.dart';
+import 'package:violet/other/dialogs.dart';
+import 'package:violet/pages/download/download_page.dart';
 import 'package:violet/database/user/record.dart';
 import 'package:violet/locale/locale.dart';
 import 'package:violet/model/article_info.dart';
@@ -159,10 +163,10 @@ class ArticleInfoPage extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Settings.majorColor.value.withAlpha(230),
               ),
-              onPressed: translateButtonEvent,
+              onPressed: () async => await downloadButtonEvent(context, data),
               child: buttonInner(
-                MdiIcons.translate,
-                '번역',
+                MdiIcons.download,
+                Translations.instance!.trans('download'),
               ),
             ),
             const SizedBox(width: 4.0),
@@ -185,12 +189,45 @@ class ArticleInfoPage extends StatelessWidget {
     );
   }
 
-  void translateButtonEvent() {
+  Future<void> downloadButtonEvent(BuildContext context, ArticleInfo data) async {
+    if (Platform.isAndroid &&
+        !Settings.useInnerStorage.value &&
+        !await Permission.manageExternalStorage.isGranted) {
+      if (await Permission.manageExternalStorage.request() ==
+          PermissionStatus.denied) {
+        if (!context.mounted) return;
+        await showOkDialog(
+          context,
+          '파일 권한을 허용하지 않으면 다운로드할 수 없습니다.',
+        );
+        return;
+      }
+    }
+    if ((await Download.getInstance()).isDownloadedArticle(
+      data.queryResult.id(),
+      false,
+    )) {
+      if (!context.mounted) return;
+      if (await showYesNoDialog(context, '이미 다운로드된 작품입니다. 그래도 다운로드할까요?') !=
+          true) {
+        return;
+      }
+    }
+
     showToast(
-      icon: Icons.translate,
+      icon: Icons.download,
       level: ToastLevel.check,
-      message: '추후 업데이트 예정',
+      message:
+          "${data.queryResult.id()}${Translations.instance!.trans('addtodownloadqueue')}",
     );
+
+    await DownloadPageManager.appendTaskFromQueryResult(
+      data.queryResult,
+      thumbnail: data.thumbnail,
+      headers: data.headers,
+    );
+    if (!context.mounted) return;
+    Navigator.pop(context);
   }
 
   Future<void> readButtonEvent(BuildContext context, ArticleInfo data, [int? page]) async {

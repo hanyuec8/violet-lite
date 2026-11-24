@@ -35,9 +35,8 @@ class FileImage extends StatefulWidget {
 
 class _FileImageState extends State<FileImage> {
   late final ViewerController c;
-  late double _height;
+  late double _placeholderHeight;
   bool _loaded = false;
-  bool _disposed = false;
 
   @override
   void initState() {
@@ -46,16 +45,15 @@ class _FileImageState extends State<FileImage> {
     c = Get.find(tag: widget.getxId);
 
     if (widget.cachedHeight != null && widget.cachedHeight! > 0) {
-      _height = widget.cachedHeight!;
+      _placeholderHeight = widget.cachedHeight!;
     } else {
-      _height = 300;
+      _placeholderHeight = 300;
     }
   }
 
   @override
   void dispose() {
     clearMemoryImageCache(widget.path);
-    _disposed = true;
     super.dispose();
   }
 
@@ -63,7 +61,8 @@ class _FileImageState extends State<FileImage> {
   Widget build(BuildContext context) {
     final image = ExtendedImage.file(
       File(widget.path),
-      fit: BoxFit.contain,
+      fit: BoxFit.fitWidth,
+      width: double.infinity,
       imageCacheName: widget.path,
       filterQuality: SettingsWrapper.getImageQuality(c.imgQuality.value),
       cacheWidth: Settings.useLowPerf.value
@@ -73,42 +72,26 @@ class _FileImageState extends State<FileImage> {
       loadStateChanged: _loadStateChanged,
     );
 
-    return AnimatedContainer(
-      alignment: Alignment.center,
-      height: _height,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOut,
-      child: GestureDetector(
-        child: image,
-        onLongPress: () {
-          PlatformNavigator.navigateSlide(
-            context,
-            ImageCropBookmark(
-              url: widget.path,
-              articleId: c.articleId,
-              page: widget.index,
-              isNetworkImage: false,
-            ),
-          );
-        },
-      ),
+    return GestureDetector(
+      child: image,
+      onLongPress: () {
+        PlatformNavigator.navigateSlide(
+          context,
+          ImageCropBookmark(
+            url: widget.path,
+            articleId: c.articleId,
+            page: widget.index,
+            isNetworkImage: false,
+          ),
+        );
+      },
     );
   }
 
   Widget _loadStateChanged(ExtendedImageState state) {
-    if (widget.cachedHeight != null && widget.cachedHeight! > 0) {
-      return state.completedWidget;
-    }
-
-    final ImageInfo? imageInfo = state.extendedImageInfo;
-    if (imageInfo != null && !_loaded) {
-      _loaded = true;
-      _setHeight(imageInfo);
-    }
-
     if (state.extendedImageLoadState == LoadState.loading) {
       return SizedBox(
-        height: _height,
+        height: _placeholderHeight,
         child: const Center(
           child: SizedBox(
             width: 30,
@@ -119,23 +102,16 @@ class _FileImageState extends State<FileImage> {
       );
     }
 
-    return state.completedWidget;
-  }
-
-  _setHeight(ImageInfo imageInfo) {
-    Future.delayed(const Duration(milliseconds: 100)).then((value) {
-      if (_disposed) return;
-
-      final width = MediaQuery.of(context).size.width;
-
-      final aspectRatio = imageInfo.image.width / imageInfo.image.height;
+    final ImageInfo? imageInfo = state.extendedImageInfo;
+    if (imageInfo != null && !_loaded) {
+      _loaded = true;
       if (widget.heightCallback != null) {
+        final width = MediaQuery.of(context).size.width;
+        final aspectRatio = imageInfo.image.width / imageInfo.image.height;
         widget.heightCallback!(width / aspectRatio);
       }
+    }
 
-      setState(() {
-        _height = width / aspectRatio;
-      });
-    });
+    return state.completedWidget;
   }
 }

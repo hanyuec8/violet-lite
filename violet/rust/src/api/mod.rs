@@ -8,3 +8,5 @@ pub mod image_hash;
 pub mod hangul;
 pub mod message_search;
 pub mod index_sync;
+pub mod translation;
+pub mod manga_vision;

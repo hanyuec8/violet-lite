@@ -39,8 +39,8 @@ class _ArticleSourceBadgeState extends State<ArticleSourceBadge> {
   void _extractFlags() {
     final result = widget.data.queryResult.result;
     _source = (result['source'] ?? '').toString();
-    _isCommon = result['is_common'] == true || _source == 'common';
     _isHitomiOnly = HybridLoader.isHitomiOnly(widget.data.queryResult);
+    _isCommon = HybridLoader.isCommon(widget.data.queryResult);
     _hasEHash = result['EHash'] != null;
     _hasHitomi = result['ExistOnHitomi'] == 1 ||
         _source == 'hitomi' ||
@@ -50,8 +50,6 @@ class _ArticleSourceBadgeState extends State<ArticleSourceBadge> {
     if (_isHitomiOnly) {
       _isCommon = false;
       _hasEHash = false;
-    } else if (_isCommon || (_hasEHash && _hasHitomi)) {
-      _isCommon = true;
     }
   }
 
@@ -69,19 +67,19 @@ class _ArticleSourceBadgeState extends State<ArticleSourceBadge> {
       badgeIcon = MdiIcons.deleteRestore;
     } else if (_isHitomiOnly) {
       badgeColor = Colors.deepOrange;
-      badgeLabel = 'Hitomi 방식 (단독)';
+      badgeLabel = 'Hitomi (단독)';
       badgeIcon = MdiIcons.eyeOutline;
     } else if (_isCommon || (_hasHitomi && _hasEHash)) {
       badgeColor = Colors.teal;
-      badgeLabel = 'Violet & Hitomi 공통';
+      badgeLabel = 'E-Hentai & Hitomi 공통';
       badgeIcon = MdiIcons.swapHorizontalCircleOutline;
     } else if (_hasHitomi) {
       badgeColor = Colors.orange;
-      badgeLabel = 'Hitomi 방식';
+      badgeLabel = 'Hitomi';
       badgeIcon = MdiIcons.eyeOutline;
     } else {
       badgeColor = Colors.deepPurple;
-      badgeLabel = 'Violet 방식 (Web)';
+      badgeLabel = 'E-Hentai';
       badgeIcon = MdiIcons.web;
     }
 

@@ -10,6 +10,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_typeahead/flutter_typeahead.dart';
 import 'package:get/get.dart';
 import 'package:violet/component/app_cache_manager.dart';
+import 'package:violet/component/manga_translation_prefetcher.dart';
+import 'package:violet/component/manga_translation_profile.dart';
 import 'package:violet/component/hitomi/message_corpus_manager.dart';
 import 'package:violet/component/hitomi/message_search.dart';
 import 'package:violet/log/log.dart';
@@ -77,6 +79,34 @@ class ViewerController extends GetxController {
   /// timer options
   var timer = false.obs;
   var timerTick = Settings.timerTick.value.obs;
+
+  /// Phase 4/5: On-device translation cache & N+1 prefetcher
+  var onDeviceTranslation = Settings.enableOnDeviceTranslation.value.obs;
+  late final MangaTranslationPrefetcher translationPrefetcher =
+      MangaTranslationPrefetcher(
+    profile: DeviceTranslationProfile.fromName(
+      Settings.translationDeviceProfile.value,
+      useNpu: Settings.translationUseNpu.value,
+    ),
+  );
+
+  void prefetchTranslationIfEnabled(
+    int currentPage,
+    Future<Uint8List?> Function(int pageIndex) imageLoader,
+  ) {
+    if (!onDeviceTranslation.value) return;
+    translationPrefetcher.prefetchNext(
+      currentPage: currentPage,
+      maxPage: maxPage,
+      imageLoader: imageLoader,
+    );
+  }
+
+  @override
+  void onClose() {
+    translationPrefetcher.clear();
+    super.onClose();
+  }
 
   /// internal options
   var onSession = true.obs;

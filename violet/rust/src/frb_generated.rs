@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1107034958;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 323040432;
 
 // Section: executor
 
@@ -119,6 +119,40 @@ fn wire__crate__api__index_sync__apply_index_delta_impl(
         },
     )
 }
+fn wire__crate__api__translation__apply_manga_glossary_sync_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "apply_manga_glossary_sync",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_text = <String>::sse_decode(&mut deserializer);
+            let api_glossary =
+                <Vec<crate::api::translation::GlossaryEntry>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::translation::apply_manga_glossary_sync(api_text, api_glossary),
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__message_search__build_fscm_file_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -152,6 +186,38 @@ fn wire__crate__api__message_search__build_fscm_file_impl(
                     Ok(output_ok)
                 })())
             }
+        },
+    )
+}
+fn wire__crate__api__translation__build_slm_batch_prompt_sync_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "build_slm_batch_prompt_sync",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_lines = <Vec<String>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::translation::build_slm_batch_prompt_sync(api_lines),
+                )?;
+                Ok(output_ok)
+            })())
         },
     )
 }
@@ -214,6 +280,53 @@ fn wire__crate__api__image_hash__compute_dhash_impl(
             transform_result_sse::<_, ()>((move || {
                 let output_ok =
                     Result::<_, ()>::Ok(crate::api::image_hash::compute_dhash(api_bytes))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__manga_vision__crop_bubble_for_manga_ocr_sync_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "crop_bubble_for_manga_ocr_sync",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_luma_bytes = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_width = <u32>::sse_decode(&mut deserializer);
+            let api_height = <u32>::sse_decode(&mut deserializer);
+            let api_box_x = <i32>::sse_decode(&mut deserializer);
+            let api_box_y = <i32>::sse_decode(&mut deserializer);
+            let api_box_w = <i32>::sse_decode(&mut deserializer);
+            let api_box_h = <i32>::sse_decode(&mut deserializer);
+            let api_target_size = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::manga_vision::crop_bubble_for_manga_ocr_sync(
+                        api_luma_bytes,
+                        api_width,
+                        api_height,
+                        api_box_x,
+                        api_box_y,
+                        api_box_w,
+                        api_box_h,
+                        api_target_size,
+                    ))?;
                 Ok(output_ok)
             })())
         },
@@ -296,6 +409,43 @@ fn wire__crate__api__simple__decompress_7z_flat_impl(
         },
     )
 }
+fn wire__crate__api__manga_vision__detect_white_bubbles_sync_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "detect_white_bubbles_sync",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_luma_bytes = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_width = <u32>::sse_decode(&mut deserializer);
+            let api_height = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::manga_vision::detect_white_bubbles_sync(
+                        api_luma_bytes,
+                        api_width,
+                        api_height,
+                    ))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__message_search__device_total_ram_mb_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -353,6 +503,176 @@ fn wire__crate__api__hangul__disassemble_hangul_lossless_impl(
                 let output_ok = Result::<_, ()>::Ok(
                     crate::api::hangul::disassemble_hangul_lossless(api_input),
                 )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__manga_vision__encode_luma_to_png_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "encode_luma_to_png",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_luma_bytes = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_width = <u32>::sse_decode(&mut deserializer);
+            let api_height = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(crate::api::manga_vision::encode_luma_to_png(
+                    api_luma_bytes,
+                    api_width,
+                    api_height,
+                ))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__manga_vision__erase_bubble_text_zero_ai_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "erase_bubble_text_zero_ai",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_luma_bytes = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_width = <u32>::sse_decode(&mut deserializer);
+            let api_height = <u32>::sse_decode(&mut deserializer);
+            let api_regions =
+                <Vec<crate::api::manga_vision::BubbleEraseRegion>>::sse_decode(&mut deserializer);
+            let api_dilation_px = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::manga_vision::erase_bubble_text_zero_ai(
+                        api_luma_bytes,
+                        api_width,
+                        api_height,
+                        api_regions,
+                        api_dilation_px,
+                    ))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__manga_vision__extract_horizontal_line_crops_sync_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "extract_horizontal_line_crops_sync",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_luma_bytes = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_width = <u32>::sse_decode(&mut deserializer);
+            let api_height = <u32>::sse_decode(&mut deserializer);
+            let api_box_x = <i32>::sse_decode(&mut deserializer);
+            let api_box_y = <i32>::sse_decode(&mut deserializer);
+            let api_box_w = <i32>::sse_decode(&mut deserializer);
+            let api_box_h = <i32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::manga_vision::extract_horizontal_line_crops_sync(
+                        api_luma_bytes,
+                        api_width,
+                        api_height,
+                        api_box_x,
+                        api_box_y,
+                        api_box_w,
+                        api_box_h,
+                    ),
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__manga_vision__filter_speech_bubbles_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "filter_speech_bubbles",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_luma_bytes = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_width = <u32>::sse_decode(&mut deserializer);
+            let api_height = <u32>::sse_decode(&mut deserializer);
+            let api_boxes =
+                <Vec<crate::api::manga_vision::TextBoxInput>>::sse_decode(&mut deserializer);
+            let api_border_px = <u32>::sse_decode(&mut deserializer);
+            let api_min_white_ratio = <f64>::sse_decode(&mut deserializer);
+            let api_allow_inverted = <bool>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::manga_vision::filter_speech_bubbles(
+                        api_luma_bytes,
+                        api_width,
+                        api_height,
+                        api_boxes,
+                        api_border_px,
+                        api_min_white_ratio,
+                        api_allow_inverted,
+                    ))?;
                 Ok(output_ok)
             })())
         },
@@ -452,6 +772,171 @@ fn wire__crate__api__nozomi__intersect_nozomi_ids_impl(
             })())
         },
     )
+}
+fn wire__crate__api__translation__manga_normalizer_normalize_japanese_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "manga_normalizer_normalize_japanese",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_raw = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::api::translation::MangaNormalizer::normalize_japanese(&api_raw),
+                    )?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__translation__manga_normalizer_polish_korean_translation_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "manga_normalizer_polish_korean_translation",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_ko = <String>::sse_decode(&mut deserializer);
+            let api_original_ja = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::api::translation::MangaNormalizer::polish_korean_translation(
+                            &api_ko,
+                            &api_original_ja,
+                        ),
+                    )?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__translation__manga_translation_engine_polish_korean_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "manga_translation_engine_polish_korean",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_translated_ko = <String>::sse_decode(&mut deserializer);
+            let api_original_ja = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::api::translation::MangaTranslationEngine::polish_korean(
+                            api_translated_ko,
+                            api_original_ja,
+                        ),
+                    )?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__translation__manga_translation_engine_translate_japanese_batch_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "manga_translation_engine_translate_japanese_batch",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_texts = <Vec<String>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::api::translation::MangaTranslationEngine::translate_japanese_batch(
+                            api_texts,
+                        ),
+                    )?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__translation__manga_translation_engine_translate_japanese_to_korean_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec,_,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "manga_translation_engine_translate_japanese_to_korean", port: Some(port_), mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal }, move || { 
+            let message = unsafe { flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_) };
+            let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_text = <String>::sse_decode(&mut deserializer);deserializer.end(); move |context|  {
+                    transform_result_sse::<_, ()>((move ||  {
+                         let output_ok = Result::<_,()>::Ok(crate::api::translation::MangaTranslationEngine::translate_japanese_to_korean(api_text))?;   Ok(output_ok)
+                    })())
+                } })
 }
 fn wire__crate__api__message_search__mobile_search_article_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
@@ -749,6 +1234,38 @@ fn wire__crate__api__message_search__mobile_search_unload_impl(
         },
     )
 }
+fn wire__crate__api__translation__normalize_japanese_sync_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "normalize_japanese_sync",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_text = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::translation::normalize_japanese_sync(api_text),
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__hangul__normalize_search_query_typos_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -807,6 +1324,147 @@ fn wire__crate__api__nozomi__parse_nozomi_bytes_impl(
             transform_result_sse::<_, ()>((move || {
                 let output_ok =
                     Result::<_, ()>::Ok(crate::api::nozomi::parse_nozomi_bytes(api_bytes))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__translation__parse_slm_batch_output_sync_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "parse_slm_batch_output_sync",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_raw_output = <String>::sse_decode(&mut deserializer);
+            let api_expected_count = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::translation::parse_slm_batch_output_sync(
+                        api_raw_output,
+                        api_expected_count,
+                    ))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__translation__polish_korean_translation_sync_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "polish_korean_translation_sync",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_translated_ko = <String>::sse_decode(&mut deserializer);
+            let api_original_ja = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::translation::polish_korean_translation_sync(
+                        api_translated_ko,
+                        api_original_ja,
+                    ))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__manga_vision__preprocess_and_detect_bubbles_sync_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "preprocess_and_detect_bubbles_sync",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_bytes = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_max_long_edge = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::manga_vision::preprocess_and_detect_bubbles_sync(
+                        api_bytes,
+                        api_max_long_edge,
+                    ),
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__manga_vision__preprocess_manga_grayscale_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "preprocess_manga_grayscale",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_bytes = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_max_long_edge = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::manga_vision::preprocess_manga_grayscale(
+                        api_bytes,
+                        api_max_long_edge,
+                    ))?;
                 Ok(output_ok)
             })())
         },
@@ -874,6 +1532,70 @@ fn wire__crate__api__hangul__restore_hangul_typo_impl(
         },
     )
 }
+fn wire__crate__api__translation__translate_manga_japanese_batch_sync_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "translate_manga_japanese_batch_sync",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_texts = <Vec<String>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::translation::translate_manga_japanese_batch_sync(api_texts),
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__translation__translate_manga_japanese_sync_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "translate_manga_japanese_sync",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_text = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::translation::translate_manga_japanese_sync(api_text),
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__message_search__verify_fscm_file_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -925,6 +1647,38 @@ impl SseDecode for bool {
     }
 }
 
+impl SseDecode for crate::api::manga_vision::BubbleEraseRegion {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_x = <i32>::sse_decode(deserializer);
+        let mut var_y = <i32>::sse_decode(deserializer);
+        let mut var_width = <i32>::sse_decode(deserializer);
+        let mut var_height = <i32>::sse_decode(deserializer);
+        let mut var_isInverted = <bool>::sse_decode(deserializer);
+        return crate::api::manga_vision::BubbleEraseRegion {
+            x: var_x,
+            y: var_y,
+            width: var_width,
+            height: var_height,
+            is_inverted: var_isInverted,
+        };
+    }
+}
+
+impl SseDecode for crate::api::manga_vision::CleanedLineCrop {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_width = <u32>::sse_decode(deserializer);
+        let mut var_height = <u32>::sse_decode(deserializer);
+        let mut var_lumaBytes = <Vec<u8>>::sse_decode(deserializer);
+        return crate::api::manga_vision::CleanedLineCrop {
+            width: var_width,
+            height: var_height,
+            luma_bytes: var_lumaBytes,
+        };
+    }
+}
+
 impl SseDecode for f32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -936,6 +1690,30 @@ impl SseDecode for f64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         deserializer.cursor.read_f64::<NativeEndian>().unwrap()
+    }
+}
+
+impl SseDecode for crate::api::manga_vision::FilteredBubbleResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_x = <i32>::sse_decode(deserializer);
+        let mut var_y = <i32>::sse_decode(deserializer);
+        let mut var_width = <i32>::sse_decode(deserializer);
+        let mut var_height = <i32>::sse_decode(deserializer);
+        let mut var_isSpeechBubble = <bool>::sse_decode(deserializer);
+        let mut var_isInverted = <bool>::sse_decode(deserializer);
+        let mut var_whiteRatio = <f64>::sse_decode(deserializer);
+        let mut var_blackRatio = <f64>::sse_decode(deserializer);
+        return crate::api::manga_vision::FilteredBubbleResult {
+            x: var_x,
+            y: var_y,
+            width: var_width,
+            height: var_height,
+            is_speech_bubble: var_isSpeechBubble,
+            is_inverted: var_isInverted,
+            white_ratio: var_whiteRatio,
+            black_ratio: var_blackRatio,
+        };
     }
 }
 
@@ -977,6 +1755,25 @@ impl SseDecode for crate::api::message_search::FscmFileInfo {
     }
 }
 
+impl SseDecode for crate::api::translation::GlossaryEntry {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_source = <String>::sse_decode(deserializer);
+        let mut var_target = <String>::sse_decode(deserializer);
+        return crate::api::translation::GlossaryEntry {
+            source: var_source,
+            target: var_target,
+        };
+    }
+}
+
+impl SseDecode for i32 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        deserializer.cursor.read_i32::<NativeEndian>().unwrap()
+    }
+}
+
 impl SseDecode for crate::api::index_sync::IndexSyncStats {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1005,6 +1802,46 @@ impl SseDecode for Vec<String> {
     }
 }
 
+impl SseDecode for Vec<crate::api::manga_vision::BubbleEraseRegion> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::manga_vision::BubbleEraseRegion>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::manga_vision::CleanedLineCrop> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::manga_vision::CleanedLineCrop>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::manga_vision::FilteredBubbleResult> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::manga_vision::FilteredBubbleResult>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::api::message_search::FscmBuildEntry> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1019,6 +1856,20 @@ impl SseDecode for Vec<crate::api::message_search::FscmBuildEntry> {
     }
 }
 
+impl SseDecode for Vec<crate::api::translation::GlossaryEntry> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::translation::GlossaryEntry>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<Vec<u32>> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1026,6 +1877,18 @@ impl SseDecode for Vec<Vec<u32>> {
         let mut ans_ = vec![];
         for idx_ in 0..len_ {
             ans_.push(<Vec<u32>>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::translation::MangaTranslationResult> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::translation::MangaTranslationResult>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -1078,6 +1941,69 @@ impl SseDecode for Vec<u8> {
             ans_.push(<u8>::sse_decode(deserializer));
         }
         return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::manga_vision::TextBoxInput> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::manga_vision::TextBoxInput>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for crate::api::translation::MangaNormalizer {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        return crate::api::translation::MangaNormalizer {};
+    }
+}
+
+impl SseDecode for crate::api::translation::MangaPageTranslationReport {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_results =
+            <Vec<crate::api::translation::MangaTranslationResult>>::sse_decode(deserializer);
+        let mut var_totalLatencyMs = <f64>::sse_decode(deserializer);
+        return crate::api::translation::MangaPageTranslationReport {
+            results: var_results,
+            total_latency_ms: var_totalLatencyMs,
+        };
+    }
+}
+
+impl SseDecode for crate::api::translation::MangaTranslationEngine {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        return crate::api::translation::MangaTranslationEngine {};
+    }
+}
+
+impl SseDecode for crate::api::translation::MangaTranslationResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_originalText = <String>::sse_decode(deserializer);
+        let mut var_translatedText = <String>::sse_decode(deserializer);
+        let mut var_intermediateEnglish = <Option<String>>::sse_decode(deserializer);
+        let mut var_normalizedSource = <String>::sse_decode(deserializer);
+        let mut var_isResolvedByDictionary = <bool>::sse_decode(deserializer);
+        let mut var_translationTier = <String>::sse_decode(deserializer);
+        let mut var_latencyMs = <f64>::sse_decode(deserializer);
+        return crate::api::translation::MangaTranslationResult {
+            original_text: var_originalText,
+            translated_text: var_translatedText,
+            intermediate_english: var_intermediateEnglish,
+            normalized_source: var_normalizedSource,
+            is_resolved_by_dictionary: var_isResolvedByDictionary,
+            translation_tier: var_translationTier,
+            latency_ms: var_latencyMs,
+        };
     }
 }
 
@@ -1180,6 +2106,32 @@ impl SseDecode for Option<crate::api::message_search::MobileSearchFilter> {
     }
 }
 
+impl SseDecode for Option<crate::api::manga_vision::PreprocessAndDetectResult> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(
+                <crate::api::manga_vision::PreprocessAndDetectResult>::sse_decode(deserializer),
+            );
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::api::manga_vision::PreprocessedMangaPage> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(
+                <crate::api::manga_vision::PreprocessedMangaPage>::sse_decode(deserializer),
+            );
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<u32> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1202,6 +2154,30 @@ impl SseDecode for Option<u64> {
     }
 }
 
+impl SseDecode for Option<crate::api::manga_vision::ZeroAiEraseResult> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::manga_vision::ZeroAiEraseResult>::sse_decode(
+                deserializer,
+            ));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<Vec<String>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<Vec<String>>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<Vec<u32>> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1210,6 +2186,62 @@ impl SseDecode for Option<Vec<u32>> {
         } else {
             return None;
         }
+    }
+}
+
+impl SseDecode for Option<Vec<u8>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<Vec<u8>>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for crate::api::manga_vision::PreprocessAndDetectResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_width = <u32>::sse_decode(deserializer);
+        let mut var_height = <u32>::sse_decode(deserializer);
+        let mut var_origWidth = <u32>::sse_decode(deserializer);
+        let mut var_origHeight = <u32>::sse_decode(deserializer);
+        let mut var_lumaBytes = <Vec<u8>>::sse_decode(deserializer);
+        let mut var_bubbles =
+            <Vec<crate::api::manga_vision::TextBoxInput>>::sse_decode(deserializer);
+        let mut var_preprocessMs = <f64>::sse_decode(deserializer);
+        let mut var_detectMs = <f64>::sse_decode(deserializer);
+        return crate::api::manga_vision::PreprocessAndDetectResult {
+            width: var_width,
+            height: var_height,
+            orig_width: var_origWidth,
+            orig_height: var_origHeight,
+            luma_bytes: var_lumaBytes,
+            bubbles: var_bubbles,
+            preprocess_ms: var_preprocessMs,
+            detect_ms: var_detectMs,
+        };
+    }
+}
+
+impl SseDecode for crate::api::manga_vision::PreprocessedMangaPage {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_width = <u32>::sse_decode(deserializer);
+        let mut var_height = <u32>::sse_decode(deserializer);
+        let mut var_origWidth = <u32>::sse_decode(deserializer);
+        let mut var_origHeight = <u32>::sse_decode(deserializer);
+        let mut var_lumaBytes = <Vec<u8>>::sse_decode(deserializer);
+        let mut var_latencyMs = <f64>::sse_decode(deserializer);
+        return crate::api::manga_vision::PreprocessedMangaPage {
+            width: var_width,
+            height: var_height,
+            orig_width: var_origWidth,
+            orig_height: var_origHeight,
+            luma_bytes: var_lumaBytes,
+            latency_ms: var_latencyMs,
+        };
     }
 }
 
@@ -1229,6 +2261,22 @@ impl SseDecode for crate::api::hangul::RestoredSearchToken {
             restored_hangul: var_restoredHangul,
             disassembled_key: var_disassembledKey,
             restored_expression: var_restoredExpression,
+        };
+    }
+}
+
+impl SseDecode for crate::api::manga_vision::TextBoxInput {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_x = <i32>::sse_decode(deserializer);
+        let mut var_y = <i32>::sse_decode(deserializer);
+        let mut var_width = <i32>::sse_decode(deserializer);
+        let mut var_height = <i32>::sse_decode(deserializer);
+        return crate::api::manga_vision::TextBoxInput {
+            x: var_x,
+            y: var_y,
+            width: var_width,
+            height: var_height,
         };
     }
 }
@@ -1259,10 +2307,23 @@ impl SseDecode for () {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {}
 }
 
-impl SseDecode for i32 {
+impl SseDecode for crate::api::manga_vision::ZeroAiEraseResult {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        deserializer.cursor.read_i32::<NativeEndian>().unwrap()
+        let mut var_width = <u32>::sse_decode(deserializer);
+        let mut var_height = <u32>::sse_decode(deserializer);
+        let mut var_lumaBytes = <Vec<u8>>::sse_decode(deserializer);
+        let mut var_erasedPixelCount = <u64>::sse_decode(deserializer);
+        let mut var_preservedBorderComponents = <u32>::sse_decode(deserializer);
+        let mut var_latencyMs = <f64>::sse_decode(deserializer);
+        return crate::api::manga_vision::ZeroAiEraseResult {
+            width: var_width,
+            height: var_height,
+            luma_bytes: var_lumaBytes,
+            erased_pixel_count: var_erasedPixelCount,
+            preserved_border_components: var_preservedBorderComponents,
+            latency_ms: var_latencyMs,
+        };
     }
 }
 
@@ -1275,50 +2336,23 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        2 => {
-            wire__crate__api__index_sync__apply_index_delta_impl(port, ptr, rust_vec_len, data_len)
-        }
-        3 => wire__crate__api__message_search__build_fscm_file_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        6 => wire__crate__api__simple__decompress_7z_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__simple__decompress_7z_flat_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__message_search__mobile_search_article_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        15 => wire__crate__api__message_search__mobile_search_init_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        17 => wire__crate__api__message_search__mobile_search_query_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        18 => wire__crate__api__message_search__mobile_search_query_ex_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        25 => wire__crate__api__message_search__verify_fscm_file_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        _ => unreachable!(),
-    }
+                        2 => wire__crate__api__index_sync__apply_index_delta_impl(port, ptr, rust_vec_len, data_len),
+4 => wire__crate__api__message_search__build_fscm_file_impl(port, ptr, rust_vec_len, data_len),
+9 => wire__crate__api__simple__decompress_7z_impl(port, ptr, rust_vec_len, data_len),
+10 => wire__crate__api__simple__decompress_7z_flat_impl(port, ptr, rust_vec_len, data_len),
+19 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+21 => wire__crate__api__translation__manga_normalizer_normalize_japanese_impl(port, ptr, rust_vec_len, data_len),
+22 => wire__crate__api__translation__manga_normalizer_polish_korean_translation_impl(port, ptr, rust_vec_len, data_len),
+23 => wire__crate__api__translation__manga_translation_engine_polish_korean_impl(port, ptr, rust_vec_len, data_len),
+24 => wire__crate__api__translation__manga_translation_engine_translate_japanese_batch_impl(port, ptr, rust_vec_len, data_len),
+25 => wire__crate__api__translation__manga_translation_engine_translate_japanese_to_korean_impl(port, ptr, rust_vec_len, data_len),
+26 => wire__crate__api__message_search__mobile_search_article_impl(port, ptr, rust_vec_len, data_len),
+28 => wire__crate__api__message_search__mobile_search_init_impl(port, ptr, rust_vec_len, data_len),
+30 => wire__crate__api__message_search__mobile_search_query_impl(port, ptr, rust_vec_len, data_len),
+31 => wire__crate__api__message_search__mobile_search_query_ex_impl(port, ptr, rust_vec_len, data_len),
+45 => wire__crate__api__message_search__verify_fscm_file_impl(port, ptr, rust_vec_len, data_len),
+                        _ => unreachable!(),
+                    }
 }
 
 fn pde_ffi_dispatcher_sync_impl(
@@ -1330,52 +2364,192 @@ fn pde_ffi_dispatcher_sync_impl(
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
         1 => wire__crate__api__hangul__analyze_search_token_impl(ptr, rust_vec_len, data_len),
-        4 => wire__crate__api__image_hash__calculate_dhash_similarity_impl(
+        3 => wire__crate__api__translation__apply_manga_glossary_sync_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        5 => wire__crate__api__image_hash__compute_dhash_impl(ptr, rust_vec_len, data_len),
-        8 => {
+        5 => wire__crate__api__translation__build_slm_batch_prompt_sync_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        6 => wire__crate__api__image_hash__calculate_dhash_similarity_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        7 => wire__crate__api__image_hash__compute_dhash_impl(ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__manga_vision__crop_bubble_for_manga_ocr_sync_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        11 => wire__crate__api__manga_vision__detect_white_bubbles_sync_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        12 => {
             wire__crate__api__message_search__device_total_ram_mb_impl(ptr, rust_vec_len, data_len)
         }
-        9 => {
+        13 => {
             wire__crate__api__hangul__disassemble_hangul_lossless_impl(ptr, rust_vec_len, data_len)
         }
-        10 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__nozomi__intersect_nozomi_ids_impl(ptr, rust_vec_len, data_len),
-        14 => {
+        14 => wire__crate__api__manga_vision__encode_luma_to_png_impl(ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__manga_vision__erase_bubble_text_zero_ai_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        16 => wire__crate__api__manga_vision__extract_horizontal_line_crops_sync_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        17 => {
+            wire__crate__api__manga_vision__filter_speech_bubbles_impl(ptr, rust_vec_len, data_len)
+        }
+        18 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__nozomi__intersect_nozomi_ids_impl(ptr, rust_vec_len, data_len),
+        27 => {
             wire__crate__api__message_search__mobile_search_cancel_impl(ptr, rust_vec_len, data_len)
         }
-        16 => wire__crate__api__message_search__mobile_search_progress_impl(
+        29 => wire__crate__api__message_search__mobile_search_progress_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        19 => wire__crate__api__message_search__mobile_search_set_popular_ids_impl(
+        32 => wire__crate__api__message_search__mobile_search_set_popular_ids_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        20 => {
+        33 => {
             wire__crate__api__message_search__mobile_search_unload_impl(ptr, rust_vec_len, data_len)
         }
-        21 => {
+        34 => {
+            wire__crate__api__translation__normalize_japanese_sync_impl(ptr, rust_vec_len, data_len)
+        }
+        35 => {
             wire__crate__api__hangul__normalize_search_query_typos_impl(ptr, rust_vec_len, data_len)
         }
-        22 => wire__crate__api__nozomi__parse_nozomi_bytes_impl(ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__message_search__recommended_mobile_budget_mb_impl(
+        36 => wire__crate__api__nozomi__parse_nozomi_bytes_impl(ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__translation__parse_slm_batch_output_sync_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        24 => wire__crate__api__hangul__restore_hangul_typo_impl(ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__translation__polish_korean_translation_sync_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        39 => wire__crate__api__manga_vision__preprocess_and_detect_bubbles_sync_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        40 => wire__crate__api__manga_vision__preprocess_manga_grayscale_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        41 => wire__crate__api__message_search__recommended_mobile_budget_mb_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        42 => wire__crate__api__hangul__restore_hangul_typo_impl(ptr, rust_vec_len, data_len),
+        43 => wire__crate__api__translation__translate_manga_japanese_batch_sync_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        44 => wire__crate__api__translation__translate_manga_japanese_sync_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
         _ => unreachable!(),
     }
 }
 
 // Section: rust2dart
 
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::manga_vision::BubbleEraseRegion {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.x.into_into_dart().into_dart(),
+            self.y.into_into_dart().into_dart(),
+            self.width.into_into_dart().into_dart(),
+            self.height.into_into_dart().into_dart(),
+            self.is_inverted.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::manga_vision::BubbleEraseRegion
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::manga_vision::BubbleEraseRegion>
+    for crate::api::manga_vision::BubbleEraseRegion
+{
+    fn into_into_dart(self) -> crate::api::manga_vision::BubbleEraseRegion {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::manga_vision::CleanedLineCrop {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.width.into_into_dart().into_dart(),
+            self.height.into_into_dart().into_dart(),
+            self.luma_bytes.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::manga_vision::CleanedLineCrop
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::manga_vision::CleanedLineCrop>
+    for crate::api::manga_vision::CleanedLineCrop
+{
+    fn into_into_dart(self) -> crate::api::manga_vision::CleanedLineCrop {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::manga_vision::FilteredBubbleResult {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.x.into_into_dart().into_dart(),
+            self.y.into_into_dart().into_dart(),
+            self.width.into_into_dart().into_dart(),
+            self.height.into_into_dart().into_dart(),
+            self.is_speech_bubble.into_into_dart().into_dart(),
+            self.is_inverted.into_into_dart().into_dart(),
+            self.white_ratio.into_into_dart().into_dart(),
+            self.black_ratio.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::manga_vision::FilteredBubbleResult
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::manga_vision::FilteredBubbleResult>
+    for crate::api::manga_vision::FilteredBubbleResult
+{
+    fn into_into_dart(self) -> crate::api::manga_vision::FilteredBubbleResult {
+        self
+    }
+}
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::message_search::FscmBuildEntry {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
@@ -1426,6 +2600,27 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::message_search::FscmFileInfo>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::translation::GlossaryEntry {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.source.into_into_dart().into_dart(),
+            self.target.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::translation::GlossaryEntry
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::translation::GlossaryEntry>
+    for crate::api::translation::GlossaryEntry
+{
+    fn into_into_dart(self) -> crate::api::translation::GlossaryEntry {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::index_sync::IndexSyncStats {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -1445,6 +2640,87 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::index_sync::IndexSyncStats>
     for crate::api::index_sync::IndexSyncStats
 {
     fn into_into_dart(self) -> crate::api::index_sync::IndexSyncStats {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::translation::MangaNormalizer {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        Vec::<u8>::new().into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::translation::MangaNormalizer
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::translation::MangaNormalizer>
+    for crate::api::translation::MangaNormalizer
+{
+    fn into_into_dart(self) -> crate::api::translation::MangaNormalizer {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::translation::MangaPageTranslationReport {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.results.into_into_dart().into_dart(),
+            self.total_latency_ms.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::translation::MangaPageTranslationReport
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::translation::MangaPageTranslationReport>
+    for crate::api::translation::MangaPageTranslationReport
+{
+    fn into_into_dart(self) -> crate::api::translation::MangaPageTranslationReport {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::translation::MangaTranslationEngine {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        Vec::<u8>::new().into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::translation::MangaTranslationEngine
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::translation::MangaTranslationEngine>
+    for crate::api::translation::MangaTranslationEngine
+{
+    fn into_into_dart(self) -> crate::api::translation::MangaTranslationEngine {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::translation::MangaTranslationResult {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.original_text.into_into_dart().into_dart(),
+            self.translated_text.into_into_dart().into_dart(),
+            self.intermediate_english.into_into_dart().into_dart(),
+            self.normalized_source.into_into_dart().into_dart(),
+            self.is_resolved_by_dictionary.into_into_dart().into_dart(),
+            self.translation_tier.into_into_dart().into_dart(),
+            self.latency_ms.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::translation::MangaTranslationResult
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::translation::MangaTranslationResult>
+    for crate::api::translation::MangaTranslationResult
+{
+    fn into_into_dart(self) -> crate::api::translation::MangaTranslationResult {
         self
     }
 }
@@ -1546,6 +2822,58 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::message_search::MobileSearchR
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::manga_vision::PreprocessAndDetectResult {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.width.into_into_dart().into_dart(),
+            self.height.into_into_dart().into_dart(),
+            self.orig_width.into_into_dart().into_dart(),
+            self.orig_height.into_into_dart().into_dart(),
+            self.luma_bytes.into_into_dart().into_dart(),
+            self.bubbles.into_into_dart().into_dart(),
+            self.preprocess_ms.into_into_dart().into_dart(),
+            self.detect_ms.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::manga_vision::PreprocessAndDetectResult
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::manga_vision::PreprocessAndDetectResult>
+    for crate::api::manga_vision::PreprocessAndDetectResult
+{
+    fn into_into_dart(self) -> crate::api::manga_vision::PreprocessAndDetectResult {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::manga_vision::PreprocessedMangaPage {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.width.into_into_dart().into_dart(),
+            self.height.into_into_dart().into_dart(),
+            self.orig_width.into_into_dart().into_dart(),
+            self.orig_height.into_into_dart().into_dart(),
+            self.luma_bytes.into_into_dart().into_dart(),
+            self.latency_ms.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::manga_vision::PreprocessedMangaPage
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::manga_vision::PreprocessedMangaPage>
+    for crate::api::manga_vision::PreprocessedMangaPage
+{
+    fn into_into_dart(self) -> crate::api::manga_vision::PreprocessedMangaPage {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::hangul::RestoredSearchToken {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -1570,6 +2898,56 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::hangul::RestoredSearchToken>
         self
     }
 }
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::manga_vision::TextBoxInput {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.x.into_into_dart().into_dart(),
+            self.y.into_into_dart().into_dart(),
+            self.width.into_into_dart().into_dart(),
+            self.height.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::manga_vision::TextBoxInput
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::manga_vision::TextBoxInput>
+    for crate::api::manga_vision::TextBoxInput
+{
+    fn into_into_dart(self) -> crate::api::manga_vision::TextBoxInput {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::manga_vision::ZeroAiEraseResult {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.width.into_into_dart().into_dart(),
+            self.height.into_into_dart().into_dart(),
+            self.luma_bytes.into_into_dart().into_dart(),
+            self.erased_pixel_count.into_into_dart().into_dart(),
+            self.preserved_border_components
+                .into_into_dart()
+                .into_dart(),
+            self.latency_ms.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::manga_vision::ZeroAiEraseResult
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::manga_vision::ZeroAiEraseResult>
+    for crate::api::manga_vision::ZeroAiEraseResult
+{
+    fn into_into_dart(self) -> crate::api::manga_vision::ZeroAiEraseResult {
+        self
+    }
+}
 
 impl SseEncode for String {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -1585,6 +2963,26 @@ impl SseEncode for bool {
     }
 }
 
+impl SseEncode for crate::api::manga_vision::BubbleEraseRegion {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.x, serializer);
+        <i32>::sse_encode(self.y, serializer);
+        <i32>::sse_encode(self.width, serializer);
+        <i32>::sse_encode(self.height, serializer);
+        <bool>::sse_encode(self.is_inverted, serializer);
+    }
+}
+
+impl SseEncode for crate::api::manga_vision::CleanedLineCrop {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u32>::sse_encode(self.width, serializer);
+        <u32>::sse_encode(self.height, serializer);
+        <Vec<u8>>::sse_encode(self.luma_bytes, serializer);
+    }
+}
+
 impl SseEncode for f32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -1596,6 +2994,20 @@ impl SseEncode for f64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         serializer.cursor.write_f64::<NativeEndian>(self).unwrap();
+    }
+}
+
+impl SseEncode for crate::api::manga_vision::FilteredBubbleResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.x, serializer);
+        <i32>::sse_encode(self.y, serializer);
+        <i32>::sse_encode(self.width, serializer);
+        <i32>::sse_encode(self.height, serializer);
+        <bool>::sse_encode(self.is_speech_bubble, serializer);
+        <bool>::sse_encode(self.is_inverted, serializer);
+        <f64>::sse_encode(self.white_ratio, serializer);
+        <f64>::sse_encode(self.black_ratio, serializer);
     }
 }
 
@@ -1622,6 +3034,21 @@ impl SseEncode for crate::api::message_search::FscmFileInfo {
     }
 }
 
+impl SseEncode for crate::api::translation::GlossaryEntry {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.source, serializer);
+        <String>::sse_encode(self.target, serializer);
+    }
+}
+
+impl SseEncode for i32 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        serializer.cursor.write_i32::<NativeEndian>(self).unwrap();
+    }
+}
+
 impl SseEncode for crate::api::index_sync::IndexSyncStats {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -1642,6 +3069,36 @@ impl SseEncode for Vec<String> {
     }
 }
 
+impl SseEncode for Vec<crate::api::manga_vision::BubbleEraseRegion> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::manga_vision::BubbleEraseRegion>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::manga_vision::CleanedLineCrop> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::manga_vision::CleanedLineCrop>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::manga_vision::FilteredBubbleResult> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::manga_vision::FilteredBubbleResult>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::api::message_search::FscmBuildEntry> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -1652,12 +3109,32 @@ impl SseEncode for Vec<crate::api::message_search::FscmBuildEntry> {
     }
 }
 
+impl SseEncode for Vec<crate::api::translation::GlossaryEntry> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::translation::GlossaryEntry>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<Vec<u32>> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <Vec<u32>>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::translation::MangaTranslationResult> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::translation::MangaTranslationResult>::sse_encode(item, serializer);
         }
     }
 }
@@ -1699,6 +3176,50 @@ impl SseEncode for Vec<u8> {
         for item in self {
             <u8>::sse_encode(item, serializer);
         }
+    }
+}
+
+impl SseEncode for Vec<crate::api::manga_vision::TextBoxInput> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::manga_vision::TextBoxInput>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for crate::api::translation::MangaNormalizer {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {}
+}
+
+impl SseEncode for crate::api::translation::MangaPageTranslationReport {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<crate::api::translation::MangaTranslationResult>>::sse_encode(
+            self.results,
+            serializer,
+        );
+        <f64>::sse_encode(self.total_latency_ms, serializer);
+    }
+}
+
+impl SseEncode for crate::api::translation::MangaTranslationEngine {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {}
+}
+
+impl SseEncode for crate::api::translation::MangaTranslationResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.original_text, serializer);
+        <String>::sse_encode(self.translated_text, serializer);
+        <Option<String>>::sse_encode(self.intermediate_english, serializer);
+        <String>::sse_encode(self.normalized_source, serializer);
+        <bool>::sse_encode(self.is_resolved_by_dictionary, serializer);
+        <String>::sse_encode(self.translation_tier, serializer);
+        <f64>::sse_encode(self.latency_ms, serializer);
     }
 }
 
@@ -1767,6 +3288,26 @@ impl SseEncode for Option<crate::api::message_search::MobileSearchFilter> {
     }
 }
 
+impl SseEncode for Option<crate::api::manga_vision::PreprocessAndDetectResult> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::manga_vision::PreprocessAndDetectResult>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::api::manga_vision::PreprocessedMangaPage> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::manga_vision::PreprocessedMangaPage>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for Option<u32> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -1787,6 +3328,26 @@ impl SseEncode for Option<u64> {
     }
 }
 
+impl SseEncode for Option<crate::api::manga_vision::ZeroAiEraseResult> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::manga_vision::ZeroAiEraseResult>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<Vec<String>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <Vec<String>>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for Option<Vec<u32>> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -1794,6 +3355,42 @@ impl SseEncode for Option<Vec<u32>> {
         if let Some(value) = self {
             <Vec<u32>>::sse_encode(value, serializer);
         }
+    }
+}
+
+impl SseEncode for Option<Vec<u8>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <Vec<u8>>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for crate::api::manga_vision::PreprocessAndDetectResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u32>::sse_encode(self.width, serializer);
+        <u32>::sse_encode(self.height, serializer);
+        <u32>::sse_encode(self.orig_width, serializer);
+        <u32>::sse_encode(self.orig_height, serializer);
+        <Vec<u8>>::sse_encode(self.luma_bytes, serializer);
+        <Vec<crate::api::manga_vision::TextBoxInput>>::sse_encode(self.bubbles, serializer);
+        <f64>::sse_encode(self.preprocess_ms, serializer);
+        <f64>::sse_encode(self.detect_ms, serializer);
+    }
+}
+
+impl SseEncode for crate::api::manga_vision::PreprocessedMangaPage {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u32>::sse_encode(self.width, serializer);
+        <u32>::sse_encode(self.height, serializer);
+        <u32>::sse_encode(self.orig_width, serializer);
+        <u32>::sse_encode(self.orig_height, serializer);
+        <Vec<u8>>::sse_encode(self.luma_bytes, serializer);
+        <f64>::sse_encode(self.latency_ms, serializer);
     }
 }
 
@@ -1806,6 +3403,16 @@ impl SseEncode for crate::api::hangul::RestoredSearchToken {
         <Option<String>>::sse_encode(self.restored_hangul, serializer);
         <String>::sse_encode(self.disassembled_key, serializer);
         <Option<String>>::sse_encode(self.restored_expression, serializer);
+    }
+}
+
+impl SseEncode for crate::api::manga_vision::TextBoxInput {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.x, serializer);
+        <i32>::sse_encode(self.y, serializer);
+        <i32>::sse_encode(self.width, serializer);
+        <i32>::sse_encode(self.height, serializer);
     }
 }
 
@@ -1835,10 +3442,15 @@ impl SseEncode for () {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {}
 }
 
-impl SseEncode for i32 {
+impl SseEncode for crate::api::manga_vision::ZeroAiEraseResult {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        serializer.cursor.write_i32::<NativeEndian>(self).unwrap();
+        <u32>::sse_encode(self.width, serializer);
+        <u32>::sse_encode(self.height, serializer);
+        <Vec<u8>>::sse_encode(self.luma_bytes, serializer);
+        <u64>::sse_encode(self.erased_pixel_count, serializer);
+        <u32>::sse_encode(self.preserved_border_components, serializer);
+        <f64>::sse_encode(self.latency_ms, serializer);
     }
 }
 

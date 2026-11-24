@@ -37,7 +37,9 @@ import 'package:violet/pages/settings/login/ehentai_login.dart';
 
 import 'package:violet/pages/settings/version_page.dart';
 import 'package:violet/pages/settings/groups/bookmark_group.dart';
+import 'package:violet/pages/settings/groups/download_group.dart';
 import 'package:violet/pages/settings/groups/search_group.dart';
+// import 'package:violet/pages/settings/groups/translation_group.dart';
 import 'package:violet/pages/settings/settings_widgets.dart';
 import 'package:violet/pages/splash/splash_page.dart';
 import 'package:violet/platform/misc.dart';
@@ -74,6 +76,8 @@ class _SettingsPageState extends ThemeSwitchableState<SettingsPage>
         ..addAll(buildSearchGroup(context, () => setState(() => _shouldReload = true)))
         ..addAll(_themeGroup())
         ..addAll(_systemGroup())
+        // ..addAll(buildTranslationGroup(context, () => setState(() => _shouldReload = true)))
+        ..addAll(buildDownloadGroup(context, () => setState(() => _shouldReload = true)))
         ..addAll(_securityGroup())
         ..addAll(_databaseGroup())
 

@@ -21,6 +21,18 @@ class PatchModel {
 
 final patches = [
   PatchModel(
+    dateTime: DateTime(2026, 11, 24),
+    version: '2.2.8 Patch',
+    contents: [
+      'Download: restored the download manager tab, queue controls, and download settings',
+      'UI & Badge: updated article source badges and enhanced detection accuracy',
+    ],
+    contentsKorean: [
+      '다운로드: 다운로드 매니저 탭 및 큐 추가 기능, 다운로드 설정 복원',
+      'UI 및 배지: 작품 배지 표기 정립 및 판정 정확도 개선',
+    ],
+  ),
+  PatchModel(
     dateTime: DateTime(2026, 11, 20),
     version: '2.2.7 Patch',
     contents: [

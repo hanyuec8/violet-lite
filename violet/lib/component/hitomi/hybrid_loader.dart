@@ -65,7 +65,7 @@ class HybridLoader {
   }
 
   /// 앱 실행 중 유지되는 인메모리 세션 캐시 (LRU 최대 2,000건 제한으로 OOM 방지)
-  /// 품번(Id) -> 뱃지 소스 ('common' | 'hitomi' | 'violet' | 'hitomi_only')
+  /// 품번(Id) -> 뱃지 소스 ('common' | 'hitomi' | 'ehentai' | 'hitomi_only')
   static final _LruMap<int, String> _sessionBadgeCache =
       _LruMap<int, String>(capacity: 2000);
 
@@ -205,7 +205,12 @@ class HybridLoader {
             }
           }
           for (final qr in hitomiList) {
-            qr.result['source'] = 'hitomi';
+            if (qr.result['is_common'] != true &&
+                qr.result['source'] != 'common' &&
+                qr.result['source'] != 'ehentai' &&
+                qr.result['source'] != 'violet') {
+              qr.result['source'] ??= 'hitomi';
+            }
           }
           return hitomiList;
         } catch (e, st) {
@@ -217,7 +222,8 @@ class HybridLoader {
         onTimeout: () => <QueryResult>[],
       );
 
-      // 3) E-Hentai 검색 (Violet 웹 검색 방식)
+      // 3) E-Hentai 검색
+      var ehSucceeded = false;
       final ehentaiFuture = Future<List<QueryResult>>(() async {
         try {
           final langPrefix = lang != 'all' ? 'language:$lang ' : '';
@@ -225,8 +231,9 @@ class HybridLoader {
           final ehQuery = formatEHentaiQuery(queryTag, lang);
           final offset = (page - 1) * pageSize;
           final ehList = await HentaiManager.searchEHentai(ehQuery, offset);
+          ehSucceeded = true;
           for (final qr in ehList) {
-            qr.result['source'] = 'violet';
+            qr.result['source'] = 'ehentai';
           }
           return ehList;
         } catch (e, st) {
@@ -306,9 +313,13 @@ class HybridLoader {
       }
 
       // E-Hentai 결과 추가 병합 및 공통 작품 승격
+      final ehIds = <int>{};
+      final ehTitles = <String>{};
       for (final item in ehResults) {
         final id = item.id();
         final itemTitle = item.title() ?? '';
+        ehIds.add(id);
+        if (itemTitle.isNotEmpty) ehTitles.add(itemTitle);
         final existing = results.where((r) {
           if (r.id() == id) return true;
           return isLanguageMatched(r, item) && isTitleMatched(r.title() ?? '', itemTitle);
@@ -322,6 +333,16 @@ class HybridLoader {
         } else {
           addResult(item);
         }
+      }
+
+      final hitomiItems = results.where((m) => m.result['source'] == 'hitomi').toList();
+      if (hitomiItems.isNotEmpty) {
+        await verifyAndTagHitomiArticles(
+          hitomiItems,
+          knownEhIds: ehIds,
+          knownEhTitles: ehTitles,
+          allowMarkHitomiOnly: ehSucceeded,
+        );
       }
 
       // ID 기준 최신순 정렬
@@ -372,17 +393,15 @@ class HybridLoader {
   /// 두 제목이 동일하거나 동일 작품의 변형인지 정밀 대조합니다.
   static bool isTitleMatched(String rawA, String rawB) {
     if (rawA.isEmpty || rawB.isEmpty) return false;
+    final fullA = normalizeTitle(rawA);
+    final fullB = normalizeTitle(rawB);
+    if (fullA.length >= 3 && fullA == fullB) return true;
+
     final tokensA = extractTitleTokens(rawA);
     final tokensB = extractTitleTokens(rawB);
 
-    for (final a in tokensA) {
-      for (final b in tokensB) {
-        if (a == b) return true;
-        if (a.length >= 5 && b.length >= 5) {
-          if (a.contains(b) || b.contains(a)) return true;
-        }
-      }
-    }
+    if (fullA.length >= 5 && tokensB.contains(fullA)) return true;
+    if (fullB.length >= 5 && tokensA.contains(fullB)) return true;
     return false;
   }
 
@@ -876,6 +895,7 @@ class HybridLoader {
     List<QueryResult> items, {
     Set<int>? knownEhIds,
     Set<String>? knownEhTitles,
+    bool allowMarkHitomiOnly = true,
   }) async {
     if (items.isEmpty) return;
 
@@ -968,25 +988,27 @@ class HybridLoader {
       }
     }
 
-    // 4) 철저한 검증 후 판정 확정: 어디에도 속하지 않는 순수 Hitomi 독점작만 hitomi_only
+    // 4) 철저한 검증 후 판정 확정: E-Hentai 대조가 정상 응답한 경우에만 순수 Hitomi 독점작을 hitomi_only로 확정
     for (final item in items) {
+      if (item.result['source'] == 'ehentai' || item.result['source'] == 'violet') continue;
       if (item.result['is_common'] == true ||
           item.result['source'] == 'common' ||
-          item.result['source'] == 'violet' ||
           item.ehash() != null) {
         item.result['source'] = 'common';
         item.result['is_common'] = true;
         _sessionBadgeCache[item.id()] = 'common';
-      } else {
+      } else if (allowMarkHitomiOnly) {
         item.result['source'] = 'hitomi_only';
         item.result['is_hitomi_only'] = true;
         _sessionBadgeCache[item.id()] = 'hitomi_only';
+      } else {
+        item.result['source'] = 'hitomi';
       }
     }
   }
 
-  /// Violet 웹 방식(E-Hentai)과 Hitomi 방식 둘 다에서 보이는 공통 작품은 철저히 제외하고,
-  /// 오직 Hitomi 방식으로만 불러올 수 있는 순수 독점/단독 최신 작품만 필터링하여 반환합니다.
+  /// E-Hentai와 Hitomi 둘 다에서 보이는 공통 작품은 철저히 제외하고,
+  /// 오직 Hitomi에서만 불러올 수 있는 순수 독점/단독 최신 작품만 필터링하여 반환합니다.
   /// 공통 작품으로 인해 이번 페이지 결과가 비어있더라도, Hitomi 인덱스가 남아있는 한
   /// 연속 탐색하여 최소한의 독점 작품을 확보한 뒤 반환합니다.
   static Future<({List<QueryResult> results, int nextScanPage, bool hasMore})> fetchHitomiOnlyArticles({
@@ -1205,6 +1227,7 @@ class HybridLoader {
             final dataStr = row['Data'] as String;
             final map = jsonDecode(dataStr) as Map<String, dynamic>;
             if (map['source'] == 'pupil') map['source'] = 'hitomi';
+            if (map['source'] == 'violet') map['source'] = 'ehentai';
             if (map['source'] == 'pupil_only') map['source'] = 'hitomi_only';
             if (map['is_pupil_only'] == true) {
               map.remove('is_pupil_only');
@@ -1297,7 +1320,7 @@ class HybridLoader {
   }
 
   /// 메인 화면용 하이브리드 작품 로더 (기본 검색 시 호출)
-  /// Violet(E-Hentai) 방식과 Hitomi(Nozomi) 방식으로 불러온 모든 작품을
+  /// E-Hentai와 Hitomi(Nozomi)에서 불러온 모든 작품을
   /// 병렬로 수집하여 중복 제거 후 합쳐서 반환합니다.
   /// 둘 다 존재하는 작품은 'common', Hitomi만 있는 작품은 'hitomi', E-Hentai만 있는 작품은 'violet' 소스 뱃지가 부여됩니다.
   static Future<List<QueryResult>> fetchMainHybridArticles({
@@ -1333,6 +1356,23 @@ class HybridLoader {
             }
           }
         } catch (_) {}
+        if (hitomiQr.result['is_common'] != true &&
+            hitomiQr.result['source'] != 'common') {
+          try {
+            final ehash = await tryGetEhHash(numericId, false)
+                .timeout(const Duration(seconds: 2));
+            hitomiQr.result['EHash'] = ehash;
+            hitomiQr.result['source'] = 'common';
+            hitomiQr.result['is_common'] = true;
+            _sessionBadgeCache[numericId] = 'common';
+          } catch (e) {
+            if (e.toString().contains('Cannot find hash')) {
+              hitomiQr.result['source'] = 'hitomi_only';
+              hitomiQr.result['is_hitomi_only'] = true;
+              _sessionBadgeCache[numericId] = 'hitomi_only';
+            }
+          }
+        }
         return [hitomiQr];
       } catch (e, st) {
         Logger.error('[HybridLoader-NumericIdQuery] E: $e\n$st');
@@ -1502,7 +1542,7 @@ class HybridLoader {
       filterMaxDate = DateTime.tryParse('$eStr 23:59:59');
     }
 
-    // 1) Hitomi 방식: fetchGalleryIdsForQuery 사용 (random 태그 제외한 pureQuery 사용)
+    // 1) Hitomi: fetchGalleryIdsForQuery 사용 (random 태그 제외한 pureQuery 사용)
     final hitomiFuture = Future<List<QueryResult>>(() async {
       try {
         List<int> ids = [];
@@ -1572,7 +1612,12 @@ class HybridLoader {
           hitomiList.addAll(await Future.wait(chunkFutures));
         }
         for (final qr in hitomiList) {
-          qr.result['source'] = 'hitomi';
+          if (qr.result['is_common'] != true &&
+              qr.result['source'] != 'common' &&
+              qr.result['source'] != 'ehentai' &&
+              qr.result['source'] != 'violet') {
+            qr.result['source'] ??= 'hitomi';
+          }
         }
         return hitomiList;
       } catch (e, st) {
@@ -1584,7 +1629,8 @@ class HybridLoader {
       onTimeout: () => <QueryResult>[],
     );
 
-    // 2) Violet 웹 방식: E-Hentai 검색 (random 태그 제외한 pureQuery 사용)
+    // 2) E-Hentai 검색 (random 태그 제외한 pureQuery 사용)
+    var ehSucceeded = false;
     final violetFuture = Future<List<QueryResult>>(() async {
       if (effectiveSortMode != SearchSortMode.latest && pureQueryWithoutLang.isEmpty) return [];
       try {
@@ -1592,8 +1638,9 @@ class HybridLoader {
         if (pageSize <= 25) {
           final offset = (page - 1) * pageSize;
           final list = await HentaiManager.searchEHentai(ehQuery, offset);
+          ehSucceeded = true;
           for (final qr in list) {
-            qr.result['source'] = 'violet';
+            qr.result['source'] = 'ehentai';
           }
           return list;
         } else {
@@ -1604,10 +1651,11 @@ class HybridLoader {
             (i) => HentaiManager.searchEHentai(ehQuery, baseOffset + i * 25),
           );
           final pagesResults = await Future.wait(futures);
+          ehSucceeded = true;
           final mergedList = <QueryResult>[];
           for (final list in pagesResults) {
             for (final qr in list) {
-              qr.result['source'] = 'violet';
+              qr.result['source'] = 'ehentai';
             }
             mergedList.addAll(list);
           }
@@ -1622,7 +1670,7 @@ class HybridLoader {
       onTimeout: () => <QueryResult>[],
     );
 
-    // 3) 로컬 DB + Expunged DB 방식: HitomiColumnModel 검색 (Triple Hybrid, random 지원)
+    // 3) 로컬 DB + Expunged DB: HitomiColumnModel 검색 (Triple Hybrid, random 지원)
     final localDbFuture = Future<List<QueryResult>>(() async {
       if (effectiveSortMode != SearchSortMode.latest && pureQueryWithoutLang.isEmpty) return [];
       try {
@@ -1761,8 +1809,8 @@ class HybridLoader {
       } else {
         if (!seenIds.contains(vId)) {
           seenIds.add(vId);
-          vItem.result['source'] = 'violet';
-          _sessionBadgeCache[vId] = 'violet';
+          vItem.result['source'] = 'ehentai';
+          _sessionBadgeCache[vId] = 'ehentai';
           merged.add(vItem);
         }
       }
@@ -1775,6 +1823,7 @@ class HybridLoader {
         hitomiItems,
         knownEhIds: ehIds,
         knownEhTitles: ehTitles,
+        allowMarkHitomiOnly: ehSucceeded,
       );
     }
 
@@ -1830,16 +1879,36 @@ class HybridLoader {
   /// 해당 작품이 로컬 DB/E-Hentai에 없는 순수 Hitomi 독점작인지 여부를 판별합니다.
   static bool isHitomiOnly(QueryResult item) {
     final res = item.result;
-    if (res['is_common'] == true || res['source'] == 'common' || res['source'] == 'violet') {
+    if (res['is_common'] == true || res['source'] == 'common' || res['source'] == 'ehentai' || res['source'] == 'violet') {
       return false;
     }
     if (res['EHash'] != null) return false;
     final cached = _sessionBadgeCache[item.id()];
-    if (cached == 'common' || cached == 'violet') return false;
+    if (cached == 'common' || cached == 'ehentai' || cached == 'violet') return false;
     if (cached == 'hitomi_only' || res['is_hitomi_only'] == true || res['source'] == 'hitomi_only') {
       return true;
     }
     // 명시적으로 검증되지 않은 작품은 Hitomi 단독작으로 노출하지 않음 (안전 가드)
+    return false;
+  }
+
+  /// 해당 작품이 E-Hentai/Violet과 Hitomi 양쪽에 모두 존재하는 공통 작품인지 여부를 판별합니다.
+  static bool isCommon(QueryResult item) {
+    final res = item.result;
+    if (res['is_common'] == true || res['source'] == 'common') return true;
+    final cached = _sessionBadgeCache[item.id()];
+    if (cached == 'common') return true;
+    if (cached == 'hitomi_only' || res['is_hitomi_only'] == true || res['source'] == 'hitomi_only') {
+      return false;
+    }
+    final hasEHash = res['EHash'] != null;
+    final hasHitomi = res['ExistOnHitomi'] == 1 || res['source'] == 'hitomi';
+    if (hasEHash && hasHitomi) return true;
+    if ((res['source'] == null || res['source'] == '') &&
+        res['ExistOnHitomi'] == 1 &&
+        res['is_hitomi_only'] != true) {
+      return true;
+    }
     return false;
   }
 

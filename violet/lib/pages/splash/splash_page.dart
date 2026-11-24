@@ -25,6 +25,7 @@ import 'package:violet/component/hitomi/artists.dart';
 import 'package:violet/component/hitomi/message_corpus_manager.dart';
 import 'package:violet/database/user/bookmark.dart';
 import 'package:violet/database/user/record.dart';
+import 'package:violet/downloader/isolate_downloader.dart';
 import 'package:violet/locale/locale.dart';
 import 'package:violet/log/act_log.dart';
 import 'package:violet/log/log.dart';
@@ -158,6 +159,8 @@ class _SplashPageState extends State<SplashPage> {
       // Population은 백그라운드에서 비동기 로딩하여 스플래시 지연을 없앰
       unawaited(Population.ensureLoaded());
       // Related(20MB JSON)는 작품 상세페이지에서 필요할 때 온디맨드로 로드됨
+      _changeMessage('init downloader...');
+      await IsolateDownloader.getInstance();
       _changeMessage('init api...');
       VioletServerV2.init();
 

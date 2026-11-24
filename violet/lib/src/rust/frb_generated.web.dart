@@ -9,9 +9,11 @@
 import 'api/hangul.dart';
 import 'api/image_hash.dart';
 import 'api/index_sync.dart';
+import 'api/manga_vision.dart';
 import 'api/message_search.dart';
 import 'api/nozomi.dart';
 import 'api/simple.dart';
+import 'api/translation.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'frb_generated.dart';
@@ -35,10 +37,29 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   MobileSearchFilter dco_decode_box_autoadd_mobile_search_filter(dynamic raw);
 
   @protected
+  PreprocessAndDetectResult dco_decode_box_autoadd_preprocess_and_detect_result(
+    dynamic raw,
+  );
+
+  @protected
+  PreprocessedMangaPage dco_decode_box_autoadd_preprocessed_manga_page(
+    dynamic raw,
+  );
+
+  @protected
   int dco_decode_box_autoadd_u_32(dynamic raw);
 
   @protected
   BigInt dco_decode_box_autoadd_u_64(dynamic raw);
+
+  @protected
+  ZeroAiEraseResult dco_decode_box_autoadd_zero_ai_erase_result(dynamic raw);
+
+  @protected
+  BubbleEraseRegion dco_decode_bubble_erase_region(dynamic raw);
+
+  @protected
+  CleanedLineCrop dco_decode_cleaned_line_crop(dynamic raw);
 
   @protected
   double dco_decode_f_32(dynamic raw);
@@ -47,10 +68,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double dco_decode_f_64(dynamic raw);
 
   @protected
+  FilteredBubbleResult dco_decode_filtered_bubble_result(dynamic raw);
+
+  @protected
   FscmBuildEntry dco_decode_fscm_build_entry(dynamic raw);
 
   @protected
   FscmFileInfo dco_decode_fscm_file_info(dynamic raw);
+
+  @protected
+  GlossaryEntry dco_decode_glossary_entry(dynamic raw);
+
+  @protected
+  int dco_decode_i_32(dynamic raw);
 
   @protected
   IndexSyncStats dco_decode_index_sync_stats(dynamic raw);
@@ -59,10 +89,29 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
+  List<BubbleEraseRegion> dco_decode_list_bubble_erase_region(dynamic raw);
+
+  @protected
+  List<CleanedLineCrop> dco_decode_list_cleaned_line_crop(dynamic raw);
+
+  @protected
+  List<FilteredBubbleResult> dco_decode_list_filtered_bubble_result(
+    dynamic raw,
+  );
+
+  @protected
   List<FscmBuildEntry> dco_decode_list_fscm_build_entry(dynamic raw);
 
   @protected
+  List<GlossaryEntry> dco_decode_list_glossary_entry(dynamic raw);
+
+  @protected
   List<Uint32List> dco_decode_list_list_prim_u_32_strict(dynamic raw);
+
+  @protected
+  List<MangaTranslationResult> dco_decode_list_manga_translation_result(
+    dynamic raw,
+  );
 
   @protected
   List<MobileMessageHit> dco_decode_list_mobile_message_hit(dynamic raw);
@@ -81,6 +130,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  List<TextBoxInput> dco_decode_list_text_box_input(dynamic raw);
+
+  @protected
+  MangaNormalizer dco_decode_manga_normalizer(dynamic raw);
+
+  @protected
+  MangaPageTranslationReport dco_decode_manga_page_translation_report(
+    dynamic raw,
+  );
+
+  @protected
+  MangaTranslationEngine dco_decode_manga_translation_engine(dynamic raw);
+
+  @protected
+  MangaTranslationResult dco_decode_manga_translation_result(dynamic raw);
 
   @protected
   MobileMessageHit dco_decode_mobile_message_hit(dynamic raw);
@@ -103,16 +169,47 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  PreprocessAndDetectResult?
+  dco_decode_opt_box_autoadd_preprocess_and_detect_result(dynamic raw);
+
+  @protected
+  PreprocessedMangaPage? dco_decode_opt_box_autoadd_preprocessed_manga_page(
+    dynamic raw,
+  );
+
+  @protected
   int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
 
   @protected
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
 
   @protected
+  ZeroAiEraseResult? dco_decode_opt_box_autoadd_zero_ai_erase_result(
+    dynamic raw,
+  );
+
+  @protected
+  List<String>? dco_decode_opt_list_String(dynamic raw);
+
+  @protected
   Uint32List? dco_decode_opt_list_prim_u_32_strict(dynamic raw);
 
   @protected
+  Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  PreprocessAndDetectResult dco_decode_preprocess_and_detect_result(
+    dynamic raw,
+  );
+
+  @protected
+  PreprocessedMangaPage dco_decode_preprocessed_manga_page(dynamic raw);
+
+  @protected
   RestoredSearchToken dco_decode_restored_search_token(dynamic raw);
+
+  @protected
+  TextBoxInput dco_decode_text_box_input(dynamic raw);
 
   @protected
   int dco_decode_u_32(dynamic raw);
@@ -127,6 +224,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void dco_decode_unit(dynamic raw);
 
   @protected
+  ZeroAiEraseResult dco_decode_zero_ai_erase_result(dynamic raw);
+
+  @protected
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
@@ -138,10 +238,33 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  PreprocessAndDetectResult sse_decode_box_autoadd_preprocess_and_detect_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  PreprocessedMangaPage sse_decode_box_autoadd_preprocessed_manga_page(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
 
   @protected
   BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
+  ZeroAiEraseResult sse_decode_box_autoadd_zero_ai_erase_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  BubbleEraseRegion sse_decode_bubble_erase_region(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  CleanedLineCrop sse_decode_cleaned_line_crop(SseDeserializer deserializer);
 
   @protected
   double sse_decode_f_32(SseDeserializer deserializer);
@@ -150,10 +273,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double sse_decode_f_64(SseDeserializer deserializer);
 
   @protected
+  FilteredBubbleResult sse_decode_filtered_bubble_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   FscmBuildEntry sse_decode_fscm_build_entry(SseDeserializer deserializer);
 
   @protected
   FscmFileInfo sse_decode_fscm_file_info(SseDeserializer deserializer);
+
+  @protected
+  GlossaryEntry sse_decode_glossary_entry(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
   IndexSyncStats sse_decode_index_sync_stats(SseDeserializer deserializer);
@@ -162,12 +296,37 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
+  List<BubbleEraseRegion> sse_decode_list_bubble_erase_region(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<CleanedLineCrop> sse_decode_list_cleaned_line_crop(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<FilteredBubbleResult> sse_decode_list_filtered_bubble_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<FscmBuildEntry> sse_decode_list_fscm_build_entry(
     SseDeserializer deserializer,
   );
 
   @protected
+  List<GlossaryEntry> sse_decode_list_glossary_entry(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<Uint32List> sse_decode_list_list_prim_u_32_strict(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<MangaTranslationResult> sse_decode_list_manga_translation_result(
     SseDeserializer deserializer,
   );
 
@@ -190,6 +349,29 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  List<TextBoxInput> sse_decode_list_text_box_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MangaNormalizer sse_decode_manga_normalizer(SseDeserializer deserializer);
+
+  @protected
+  MangaPageTranslationReport sse_decode_manga_page_translation_report(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MangaTranslationEngine sse_decode_manga_translation_engine(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MangaTranslationResult sse_decode_manga_translation_result(
+    SseDeserializer deserializer,
+  );
 
   @protected
   MobileMessageHit sse_decode_mobile_message_hit(SseDeserializer deserializer);
@@ -218,10 +400,29 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  PreprocessAndDetectResult?
+  sse_decode_opt_box_autoadd_preprocess_and_detect_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  PreprocessedMangaPage? sse_decode_opt_box_autoadd_preprocessed_manga_page(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
 
   @protected
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
+  ZeroAiEraseResult? sse_decode_opt_box_autoadd_zero_ai_erase_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<String>? sse_decode_opt_list_String(SseDeserializer deserializer);
 
   @protected
   Uint32List? sse_decode_opt_list_prim_u_32_strict(
@@ -229,9 +430,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  PreprocessAndDetectResult sse_decode_preprocess_and_detect_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  PreprocessedMangaPage sse_decode_preprocessed_manga_page(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RestoredSearchToken sse_decode_restored_search_token(
     SseDeserializer deserializer,
   );
+
+  @protected
+  TextBoxInput sse_decode_text_box_input(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_32(SseDeserializer deserializer);
@@ -246,7 +463,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_decode_unit(SseDeserializer deserializer);
 
   @protected
-  int sse_decode_i_32(SseDeserializer deserializer);
+  ZeroAiEraseResult sse_decode_zero_ai_erase_result(
+    SseDeserializer deserializer,
+  );
 
   @protected
   void sse_encode_String(String self, SseSerializer serializer);
@@ -261,16 +480,52 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_preprocess_and_detect_result(
+    PreprocessAndDetectResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_preprocessed_manga_page(
+    PreprocessedMangaPage self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_zero_ai_erase_result(
+    ZeroAiEraseResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_bubble_erase_region(
+    BubbleEraseRegion self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_cleaned_line_crop(
+    CleanedLineCrop self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_f_32(double self, SseSerializer serializer);
 
   @protected
   void sse_encode_f_64(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_filtered_bubble_result(
+    FilteredBubbleResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_fscm_build_entry(
@@ -282,6 +537,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_fscm_file_info(FscmFileInfo self, SseSerializer serializer);
 
   @protected
+  void sse_encode_glossary_entry(GlossaryEntry self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_i_32(int self, SseSerializer serializer);
+
+  @protected
   void sse_encode_index_sync_stats(
     IndexSyncStats self,
     SseSerializer serializer,
@@ -291,14 +552,44 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_bubble_erase_region(
+    List<BubbleEraseRegion> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_cleaned_line_crop(
+    List<CleanedLineCrop> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_filtered_bubble_result(
+    List<FilteredBubbleResult> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_fscm_build_entry(
     List<FscmBuildEntry> self,
     SseSerializer serializer,
   );
 
   @protected
+  void sse_encode_list_glossary_entry(
+    List<GlossaryEntry> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_list_prim_u_32_strict(
     List<Uint32List> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_manga_translation_result(
+    List<MangaTranslationResult> self,
     SseSerializer serializer,
   );
 
@@ -336,6 +627,36 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_text_box_input(
+    List<TextBoxInput> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_manga_normalizer(
+    MangaNormalizer self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_manga_page_translation_report(
+    MangaPageTranslationReport self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_manga_translation_engine(
+    MangaTranslationEngine self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_manga_translation_result(
+    MangaTranslationResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_mobile_message_hit(
     MobileMessageHit self,
     SseSerializer serializer,
@@ -369,10 +690,31 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_preprocess_and_detect_result(
+    PreprocessAndDetectResult? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_preprocessed_manga_page(
+    PreprocessedMangaPage? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_zero_ai_erase_result(
+    ZeroAiEraseResult? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_list_String(List<String>? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_list_prim_u_32_strict(
@@ -381,10 +723,31 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_list_prim_u_8_strict(
+    Uint8List? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_preprocess_and_detect_result(
+    PreprocessAndDetectResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_preprocessed_manga_page(
+    PreprocessedMangaPage self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_restored_search_token(
     RestoredSearchToken self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_text_box_input(TextBoxInput self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_32(int self, SseSerializer serializer);
@@ -399,7 +762,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_unit(void self, SseSerializer serializer);
 
   @protected
-  void sse_encode_i_32(int self, SseSerializer serializer);
+  void sse_encode_zero_ai_erase_result(
+    ZeroAiEraseResult self,
+    SseSerializer serializer,
+  );
 }
 
 // Section: wire_class
