@@ -6,6 +6,8 @@ import 'package:html/parser.dart';
 import 'package:html_unescape/html_unescape.dart';
 import 'package:intl/intl.dart';
 import 'package:violet/log/log.dart';
+import 'package:violet/src/rust/api/html_parser.dart' as rust_html;
+import 'package:violet/src/rust/frb_generated.dart';
 
 class EHArticle {
   late String thumbnail;
@@ -56,6 +58,81 @@ class EHResultArticle {
 // E-Hentai, EX-Hentai Parser
 // You can use both of the previous.
 class EHParser {
+  static bool get _useRust {
+    try {
+      return RustLib.instance.initialized;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static EHResultArticle _fromRustResultArticle(
+    rust_html.EhResultArticleParsed r,
+  ) {
+    final article = EHResultArticle()
+      ..url = r.url
+      ..thumbnail = r.thumbnail
+      ..title = r.title
+      ..uploader = r.uploader
+      ..published = r.published
+      ..files = r.files
+      ..type = r.articleType;
+    if (r.descriptKeys.isNotEmpty) {
+      final dict = <String, List<String>>{};
+      for (var i = 0; i < r.descriptKeys.length; i++) {
+        dict[r.descriptKeys[i]] = r.descriptValues[i];
+      }
+      article.descripts = dict;
+    }
+    return article;
+  }
+
+  static EHArticle _fromRustArticle(rust_html.EhArticleParsed p) {
+    final article = EHArticle()
+      ..thumbnail = p.thumbnail
+      ..imagesPerPage = p.imagesPerPage
+      ..title = p.title
+      ..subTitle = p.subTitle
+      ..posted = p.posted
+      ..parent = p.parent
+      ..visible = p.visible
+      ..language = p.language
+      ..fileSize = p.fileSize
+      ..length = p.length
+      ..favorited = p.favorited
+      ..languages = p.languages
+      ..group = p.group
+      ..parody = p.parody
+      ..character = p.character
+      ..artist = p.artist
+      ..male = p.male
+      ..female = p.female
+      ..misc = p.misc;
+    if (p.uploader != null) article.uploader = p.uploader!;
+
+    final df = DateFormat('dd MMMM yyyy, H:m');
+    final comments = <(DateTime, String, String)>[];
+    for (final c in p.comments) {
+      final date = c.postedRaw;
+      comments.add((
+        df.parse(
+          date
+              .substring(
+                0,
+                date.contains(' by') ? date.indexOf(' by') : date.length,
+              )
+              .substring('Posted on '.length),
+          true,
+        ),
+        c.author,
+        c.contents,
+      ));
+    }
+    comments.sort((x, y) => x.$1.compareTo(y.$1));
+    article.comment = comments;
+    return article;
+  }
+
   static final RegExp _thumbnailPattern = RegExp(
     r'https://(s\.)?(exhentai|ehgt).org/.*?(?=\))',
   );
@@ -69,6 +146,9 @@ class EHParser {
 
   // ex: https://exhentai.org/g/1212168/421ef300a8/
   static List<String> getImagesUrl(String html) {
+    if (_useRust) {
+      return rust_html.parseEhImagesUrlSync(html: html);
+    }
     var doc = parse(html).querySelector("div[id='gdt']");
     var result = <String>[];
     doc!.querySelectorAll('div').forEach((element) {
@@ -94,6 +174,9 @@ class EHParser {
 
   // ex: https://exhentai.org/s/df24b19548/1212549-2
   static String getImageAddress(String html) {
+    if (_useRust) {
+      return rust_html.parseEhImageAddressSync(html: html);
+    }
     var doc = parse(html).querySelector("div[id='i1']");
     return doc!.querySelector("div[id='i3'] a img")!.attributes['src']!;
   }
@@ -107,6 +190,9 @@ class EHParser {
   }
 
   static EHArticle parseArticleData(String html) {
+    if (_useRust) {
+      return _fromRustArticle(rust_html.parseEhArticleDataSync(html: html));
+    }
     var article = EHArticle();
     var h = parse(html);
     var doc = h.querySelector('div.gm');
@@ -238,6 +324,12 @@ class EHParser {
 
   // ex: https://exhentai.org/?inline_set=dm_t
   static List<EHResultArticle> parseReulstPageThumbnailView(String html) {
+    if (_useRust) {
+      return rust_html
+          .parseEhThumbnailViewSync(html: html)
+          .map(_fromRustResultArticle)
+          .toList();
+    }
     var result = <EHResultArticle>[];
 
     var nodes = parse(html).querySelectorAll('div.itg > div.id1');
@@ -267,6 +359,12 @@ class EHParser {
 
   // ex: https://exhentai.org/?inline_set=dm_l
   static List<EHResultArticle> parseReulstPageListView(String html) {
+    if (_useRust) {
+      return rust_html
+          .parseEhListViewSync(html: html)
+          .map(_fromRustResultArticle)
+          .toList();
+    }
     var result = <EHResultArticle>[];
 
     var nodes = parse(html).querySelectorAll('div.itg > tr');
@@ -301,6 +399,12 @@ class EHParser {
   // ex: https://exhentai.org/?inline_set=dm_e
   // The html source is broken. Therefore, you have to do fucking like this.
   static List<EHResultArticle> parseReulstPageExtendedListView(String html) {
+    if (_useRust) {
+      return rust_html
+          .parseEhExtendedListViewSync(html: html)
+          .map(_fromRustResultArticle)
+          .toList();
+    }
     var result = <EHResultArticle>[];
 
     var q = <Element>[];
@@ -371,8 +475,24 @@ class EHParser {
     return result;
   }
 
+  static Future<List<EHResultArticle>> parseReulstPageExtendedListViewAsync(
+    String html,
+  ) async {
+    if (_useRust) {
+      final rows = await rust_html.parseEhExtendedListView(html: html);
+      return rows.map(_fromRustResultArticle).toList();
+    }
+    return parseReulstPageExtendedListView(html);
+  }
+
   // ex: https://exhentai.org/?inline_set=dm_m
   static List<EHResultArticle> parseReulstPageMinimalListView(String html) {
+    if (_useRust) {
+      return rust_html
+          .parseEhMinimalListViewSync(html: html)
+          .map(_fromRustResultArticle)
+          .toList();
+    }
     var result = <EHResultArticle>[];
 
     var nodes = parse(html).querySelectorAll("table[class='itg gltm'] > tr");

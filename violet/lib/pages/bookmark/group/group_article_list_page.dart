@@ -280,8 +280,8 @@ class _GroupArticleListPageState extends State<GroupArticleListPage> {
       Future.microtask(() async {
         await _fetchIdOnlyItems(queryResult);
         if (mounted) {
-          _shouldRebuild = true;
-          setState(() {});
+          _applyFilter();
+          _rebuild();
         }
       });
     }
@@ -470,6 +470,7 @@ class _GroupArticleListPageState extends State<GroupArticleListPage> {
 
   Widget _filter() {
     final hasFilter = _filterController.hasAnyActiveFilter;
+    final activeCount = _filterController.activeFilterCount;
     final canDialogueSearch = MessageCorpusManager.instance.isReady;
 
     return Align(
@@ -512,6 +513,63 @@ class _GroupArticleListPageState extends State<GroupArticleListPage> {
                 ),
               ),
             ),
+          Padding(
+            padding: const EdgeInsets.only(right: 4.0),
+            child: Card(
+              color: Palette.themeColor,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(8.0)),
+              ),
+              elevation: !Settings.themeFlat.value ? 100 : 0,
+              clipBehavior: Clip.antiAliasWithSaveLayer,
+              child: InkWell(
+                onTap: filterOnTap,
+                child: SizedBox(
+                  height: 48,
+                  width: 48,
+                  child: Tooltip(
+                    message: '태그 포함/제외 필터',
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: <Widget>[
+                        Icon(
+                          hasFilter
+                              ? MdiIcons.filter
+                              : MdiIcons.filterOutline,
+                          color: hasFilter
+                              ? Settings.majorColor.value
+                              : Colors.grey,
+                        ),
+                        if (activeCount > 0)
+                          Positioned(
+                            top: 6,
+                            right: 6,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 1,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Settings.majorColor.value,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                '$activeCount',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
           Hero(
             tag: 'searchtype\$bookmark',
             child: Card(
@@ -642,18 +700,16 @@ class _GroupArticleListPageState extends State<GroupArticleListPage> {
     );
 
     _applyFilter();
-    _shouldRebuild = true;
-    setState(() {
-      _shouldRebuild = true;
-      sliverKey = ObjectKey(const Uuid().v4());
-    });
+    _rebuild();
   }
 
   Widget _title() {
     return Padding(
-      padding: const EdgeInsets.only(top: 24, left: 12),
+      padding: const EdgeInsets.only(top: 24, left: 12, right: 160),
       child: Text(
         widget.name,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
       ),
     );
@@ -708,6 +764,12 @@ class _GroupArticleListPageState extends State<GroupArticleListPage> {
   }
 
   Future<void> moveChecked() async {
+    await _moveArticlesToGroup(List<int>.from(checked));
+  }
+
+  Future<void> _moveArticlesToGroup(List<int> targetIds) async {
+    if (targetIds.isEmpty) return;
+
     var groups = await (await Bookmark.getInstance()).getGroup();
     var currentGroup = widget.groupId;
     groups = groups
@@ -726,7 +788,7 @@ class _GroupArticleListPageState extends State<GroupArticleListPage> {
             ),
             child: Text(Translations.instance!.trans('cancel')),
             onPressed: () {
-              Navigator.pop(context, 0);
+              Navigator.pop(context, null);
             },
           ),
         ],
@@ -755,36 +817,20 @@ class _GroupArticleListPageState extends State<GroupArticleListPage> {
       Translations.instance!
           .trans('movetoto')
           .replaceAll('%1', groups[whereToMove].name())
-          .replaceAll('%2', checked.length.toString()),
+          .replaceAll('%2', targetIds.length.toString()),
       Translations.instance!.trans('movebookmark'),
     )) {
-      // There is a way to change only the group, but there is also re-register a new bookmark.
-      // I chose the latter to suit the user's intentions.
-
-      // Atomic!!
-      // 0. Sort Checked
       var invIdIndex = <int, int>{};
       for (int i = 0; i < queryResult.length; i++) {
         invIdIndex[queryResult[i].id()] = i;
       }
-      checked.sort((x, y) => invIdIndex[x]!.compareTo(invIdIndex[y]!));
+      targetIds.sort(
+        (x, y) => (invIdIndex[x] ?? 0).compareTo(invIdIndex[y] ?? 0),
+      );
 
-      // 1. Get bookmark articles on source groupid
       var bm = await Bookmark.getInstance();
-      // var article = await bm.getArticle();
-      // var src = article
-      //     .where((element) => element.group() == currentGroup)
-      //     .toList();
-
-      // 2. Save source bookmark for fault torlerance!
-      // final cacheDir = await getTemporaryDirectory();
-      // final path = File('${cacheDir.path}/bookmark_cache+${Uuid().v4()}');
-      // path.writeAsString(jsonEncode(checked));
-
-      for (var e in checked.reversed) {
-        // 3. Delete source bookmarks
+      for (var e in targetIds.reversed) {
         await bm.unbookmark(e);
-        // 4. Add src bookmarks with new groupid
         await bm.insertArticle(
           e.toString(),
           DateTime.now(),
@@ -792,20 +838,21 @@ class _GroupArticleListPageState extends State<GroupArticleListPage> {
         );
       }
 
-      // 5. Update UI
-      _shouldRebuild = true;
-      setState(() {
+      if (checkMode) {
         _shouldRebuild = true;
-        checkModePre = false;
-        checked.clear();
-      });
-      _shouldRebuild = true;
-      Future.delayed(const Duration(milliseconds: 500)).then((value) {
         setState(() {
           _shouldRebuild = true;
-          checkMode = false;
+          checkModePre = false;
+          checked.clear();
         });
-      });
+        Future.delayed(const Duration(milliseconds: 500)).then((value) {
+          if (!mounted) return;
+          setState(() {
+            _shouldRebuild = true;
+            checkMode = false;
+          });
+        });
+      }
       refresh();
     }
   }

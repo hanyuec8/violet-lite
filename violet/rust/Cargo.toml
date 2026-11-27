@@ -15,6 +15,7 @@ ahash = "0.8"
 memchr = "2"
 rapidfuzz = "0.5"
 rayon = "1.10"
+scraper = { version = "0.22.0", default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
@@ -30,3 +31,6 @@ opt-level = 2
 
 [profile.dev.package."*"]
 opt-level = 3
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

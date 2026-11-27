@@ -153,29 +153,32 @@ void main() {
   });
 
   group('[기능 3] 이미지 지각적 해시 (computeDhash)', () {
-    test('3.1 실제 이미지 파일로부터 64비트 dHash 생성 검증', () {
+    test('3.1 실제 이미지 파일로부터 64비트 dHash 생성 검증', () async {
       final file = File('../testimage/japanese/Screenshot_20261031_155558.png');
       expect(file.existsSync(), isTrue);
 
       final bytes = file.readAsBytesSync();
       final sw = Stopwatch()..start();
-      final hash = rust_image_hash.computeDhash(bytes: bytes);
+      final hash = await rust_image_hash.computeDhash(bytes: bytes);
       sw.stop();
 
-      expect(hash, isNotNull);
       expect(hash, isA<BigInt>());
-      print('>> [실측] 실제 만화 이미지(${bytes.length ~/ 1024}KB) dHash 생성: 0x${hash!.toRadixString(16).padLeft(16, '0')} (소요 시간: ${sw.elapsedMilliseconds}ms)');
+      print('>> [실측] 실제 만화 이미지(${bytes.length ~/ 1024}KB) dHash 생성: 0x${hash.toRadixString(16).padLeft(16, '0')} (소요 시간: ${sw.elapsedMilliseconds}ms)');
     });
 
-    test('3.2 엣지 케이스: 빈 바이트 배열 입력 시 안전하게 null 반환', () {
-      final hash = rust_image_hash.computeDhash(bytes: []);
-      expect(hash, isNull);
+    test('3.2 엣지 케이스: 빈 바이트 배열 입력 시 오류 반환', () async {
+      await expectLater(
+        () => rust_image_hash.computeDhash(bytes: []),
+        throwsA(anything),
+      );
     });
 
-    test('3.3 엣지 케이스: 손상된 바이트 입력 시 크래시 없이 null 반환', () {
+    test('3.3 엣지 케이스: 손상된 바이트 입력 시 크래시 없이 오류 반환', () async {
       final corruptedBytes = [0xFF, 0xD8, 0xFF, 0x00, 0x12, 0x34];
-      final hash = rust_image_hash.computeDhash(bytes: corruptedBytes);
-      expect(hash, isNull);
+      await expectLater(
+        () => rust_image_hash.computeDhash(bytes: corruptedBytes),
+        throwsA(anything),
+      );
     });
   });
 
@@ -200,12 +203,12 @@ void main() {
       expect(sim, equals(98.4375));
     });
 
-    test('4.4 실제 서로 다른 두 만화 이미지 간의 dHash 유사도 측정', () {
+    test('4.4 실제 서로 다른 두 만화 이미지 간의 dHash 유사도 측정', () async {
       final file1 = File('../testimage/japanese/Screenshot_20261031_155558.png');
       final file2 = File('../testimage/japanese/Screenshot_20261031_155659.png');
 
-      final hash1 = rust_image_hash.computeDhash(bytes: file1.readAsBytesSync())!;
-      final hash2 = rust_image_hash.computeDhash(bytes: file2.readAsBytesSync())!;
+      final hash1 = await rust_image_hash.computeDhash(bytes: file1.readAsBytesSync());
+      final hash2 = await rust_image_hash.computeDhash(bytes: file2.readAsBytesSync());
 
       final simSame = rust_image_hash.calculateDhashSimilarity(h1: hash1, h2: hash1);
       final simDiff = rust_image_hash.calculateDhashSimilarity(h1: hash1, h2: hash2);

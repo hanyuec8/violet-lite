@@ -3,13 +3,17 @@
 
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
+import 'api/article_filter.dart';
+import 'api/grouping.dart';
 import 'api/hangul.dart';
+import 'api/html_parser.dart';
 import 'api/image_hash.dart';
 import 'api/index_sync.dart';
 import 'api/manga_vision.dart';
 import 'api/message_search.dart';
 import 'api/nozomi.dart';
 import 'api/simple.dart';
+import 'api/tag_index_store.dart';
 import 'api/translation.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -32,6 +36,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool dco_decode_bool(dynamic raw);
 
   @protected
+  int dco_decode_box_autoadd_i_32(dynamic raw);
+
+  @protected
+  PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw);
+
+  @protected
   MobileSearchFilter dco_decode_box_autoadd_mobile_search_filter(dynamic raw);
 
   @protected
@@ -48,9 +58,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int dco_decode_box_autoadd_u_32(dynamic raw);
 
   @protected
-  BigInt dco_decode_box_autoadd_u_64(dynamic raw);
-
-  @protected
   ZeroAiEraseResult dco_decode_box_autoadd_zero_ai_erase_result(dynamic raw);
 
   @protected
@@ -60,10 +67,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CleanedLineCrop dco_decode_cleaned_line_crop(dynamic raw);
 
   @protected
+  EhArticleParsed dco_decode_eh_article_parsed(dynamic raw);
+
+  @protected
+  EhCommentParsed dco_decode_eh_comment_parsed(dynamic raw);
+
+  @protected
+  EhResultArticleParsed dco_decode_eh_result_article_parsed(dynamic raw);
+
+  @protected
   double dco_decode_f_32(dynamic raw);
 
   @protected
   double dco_decode_f_64(dynamic raw);
+
+  @protected
+  FilterArticleInput dco_decode_filter_article_input(dynamic raw);
+
+  @protected
+  FilterTokenInput dco_decode_filter_token_input(dynamic raw);
 
   @protected
   FilteredBubbleResult dco_decode_filtered_bubble_result(dynamic raw);
@@ -78,7 +100,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   GlossaryEntry dco_decode_glossary_entry(dynamic raw);
 
   @protected
+  HitomiGalleryBlockParsed dco_decode_hitomi_gallery_block_parsed(dynamic raw);
+
+  @protected
+  HitomiGalleryExtraParsed dco_decode_hitomi_gallery_extra_parsed(dynamic raw);
+
+  @protected
   int dco_decode_i_32(dynamic raw);
+
+  @protected
+  PlatformInt64 dco_decode_i_64(dynamic raw);
 
   @protected
   IndexSyncStats dco_decode_index_sync_stats(dynamic raw);
@@ -93,6 +124,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<CleanedLineCrop> dco_decode_list_cleaned_line_crop(dynamic raw);
 
   @protected
+  List<EhCommentParsed> dco_decode_list_eh_comment_parsed(dynamic raw);
+
+  @protected
+  List<EhResultArticleParsed> dco_decode_list_eh_result_article_parsed(
+    dynamic raw,
+  );
+
+  @protected
+  List<FilterArticleInput> dco_decode_list_filter_article_input(dynamic raw);
+
+  @protected
+  List<FilterTokenInput> dco_decode_list_filter_token_input(dynamic raw);
+
+  @protected
   List<FilteredBubbleResult> dco_decode_list_filtered_bubble_result(
     dynamic raw,
   );
@@ -102,6 +147,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<GlossaryEntry> dco_decode_list_glossary_entry(dynamic raw);
+
+  @protected
+  List<List<String>> dco_decode_list_list_String(dynamic raw);
 
   @protected
   List<Uint32List> dco_decode_list_list_prim_u_32_strict(dynamic raw);
@@ -128,6 +176,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  List<TagCountItem> dco_decode_list_tag_count_item(dynamic raw);
+
+  @protected
+  List<TagFuzzyItem> dco_decode_list_tag_fuzzy_item(dynamic raw);
+
+  @protected
+  List<TagScoreItem> dco_decode_list_tag_score_item(dynamic raw);
 
   @protected
   List<TextBoxInput> dco_decode_list_text_box_input(dynamic raw);
@@ -162,6 +219,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
+  int? dco_decode_opt_box_autoadd_i_32(dynamic raw);
+
+  @protected
+  PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw);
+
+  @protected
   MobileSearchFilter? dco_decode_opt_box_autoadd_mobile_search_filter(
     dynamic raw,
   );
@@ -177,9 +240,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
-
-  @protected
-  BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
 
   @protected
   ZeroAiEraseResult? dco_decode_opt_box_autoadd_zero_ai_erase_result(
@@ -207,6 +267,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RestoredSearchToken dco_decode_restored_search_token(dynamic raw);
 
   @protected
+  TagCountItem dco_decode_tag_count_item(dynamic raw);
+
+  @protected
+  TagFuzzyItem dco_decode_tag_fuzzy_item(dynamic raw);
+
+  @protected
+  TagIndexSummary dco_decode_tag_index_summary(dynamic raw);
+
+  @protected
+  TagScoreItem dco_decode_tag_score_item(dynamic raw);
+
+  @protected
   TextBoxInput dco_decode_text_box_input(dynamic raw);
 
   @protected
@@ -231,6 +303,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
+  int sse_decode_box_autoadd_i_32(SseDeserializer deserializer);
+
+  @protected
+  PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer);
+
+  @protected
   MobileSearchFilter sse_decode_box_autoadd_mobile_search_filter(
     SseDeserializer deserializer,
   );
@@ -249,9 +327,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
 
   @protected
-  BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
-
-  @protected
   ZeroAiEraseResult sse_decode_box_autoadd_zero_ai_erase_result(
     SseDeserializer deserializer,
   );
@@ -265,10 +340,29 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CleanedLineCrop sse_decode_cleaned_line_crop(SseDeserializer deserializer);
 
   @protected
+  EhArticleParsed sse_decode_eh_article_parsed(SseDeserializer deserializer);
+
+  @protected
+  EhCommentParsed sse_decode_eh_comment_parsed(SseDeserializer deserializer);
+
+  @protected
+  EhResultArticleParsed sse_decode_eh_result_article_parsed(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   double sse_decode_f_32(SseDeserializer deserializer);
 
   @protected
   double sse_decode_f_64(SseDeserializer deserializer);
+
+  @protected
+  FilterArticleInput sse_decode_filter_article_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  FilterTokenInput sse_decode_filter_token_input(SseDeserializer deserializer);
 
   @protected
   FilteredBubbleResult sse_decode_filtered_bubble_result(
@@ -285,7 +379,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   GlossaryEntry sse_decode_glossary_entry(SseDeserializer deserializer);
 
   @protected
+  HitomiGalleryBlockParsed sse_decode_hitomi_gallery_block_parsed(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  HitomiGalleryExtraParsed sse_decode_hitomi_gallery_extra_parsed(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   int sse_decode_i_32(SseDeserializer deserializer);
+
+  @protected
+  PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
 
   @protected
   IndexSyncStats sse_decode_index_sync_stats(SseDeserializer deserializer);
@@ -304,6 +411,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<EhCommentParsed> sse_decode_list_eh_comment_parsed(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<EhResultArticleParsed> sse_decode_list_eh_result_article_parsed(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<FilterArticleInput> sse_decode_list_filter_article_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<FilterTokenInput> sse_decode_list_filter_token_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<FilteredBubbleResult> sse_decode_list_filtered_bubble_result(
     SseDeserializer deserializer,
   );
@@ -317,6 +444,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<GlossaryEntry> sse_decode_list_glossary_entry(
     SseDeserializer deserializer,
   );
+
+  @protected
+  List<List<String>> sse_decode_list_list_String(SseDeserializer deserializer);
 
   @protected
   List<Uint32List> sse_decode_list_list_prim_u_32_strict(
@@ -347,6 +477,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  List<TagCountItem> sse_decode_list_tag_count_item(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<TagFuzzyItem> sse_decode_list_tag_fuzzy_item(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<TagScoreItem> sse_decode_list_tag_score_item(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<TextBoxInput> sse_decode_list_text_box_input(
@@ -393,6 +538,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
+  int? sse_decode_opt_box_autoadd_i_32(SseDeserializer deserializer);
+
+  @protected
+  PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer);
+
+  @protected
   MobileSearchFilter? sse_decode_opt_box_autoadd_mobile_search_filter(
     SseDeserializer deserializer,
   );
@@ -410,9 +561,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
-
-  @protected
-  BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
   ZeroAiEraseResult? sse_decode_opt_box_autoadd_zero_ai_erase_result(
@@ -446,6 +594,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  TagCountItem sse_decode_tag_count_item(SseDeserializer deserializer);
+
+  @protected
+  TagFuzzyItem sse_decode_tag_fuzzy_item(SseDeserializer deserializer);
+
+  @protected
+  TagIndexSummary sse_decode_tag_index_summary(SseDeserializer deserializer);
+
+  @protected
+  TagScoreItem sse_decode_tag_score_item(SseDeserializer deserializer);
+
+  @protected
   TextBoxInput sse_decode_text_box_input(SseDeserializer deserializer);
 
   @protected
@@ -472,6 +632,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_i_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_i_64(
+    PlatformInt64 self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_mobile_search_filter(
     MobileSearchFilter self,
     SseSerializer serializer,
@@ -493,9 +662,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
 
   @protected
-  void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
-
-  @protected
   void sse_encode_box_autoadd_zero_ai_erase_result(
     ZeroAiEraseResult self,
     SseSerializer serializer,
@@ -514,10 +680,40 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_eh_article_parsed(
+    EhArticleParsed self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_eh_comment_parsed(
+    EhCommentParsed self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_eh_result_article_parsed(
+    EhResultArticleParsed self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_f_32(double self, SseSerializer serializer);
 
   @protected
   void sse_encode_f_64(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_filter_article_input(
+    FilterArticleInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_filter_token_input(
+    FilterTokenInput self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_filtered_bubble_result(
@@ -538,7 +734,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_glossary_entry(GlossaryEntry self, SseSerializer serializer);
 
   @protected
+  void sse_encode_hitomi_gallery_block_parsed(
+    HitomiGalleryBlockParsed self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_hitomi_gallery_extra_parsed(
+    HitomiGalleryExtraParsed self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_i_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
 
   @protected
   void sse_encode_index_sync_stats(
@@ -562,6 +773,30 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_eh_comment_parsed(
+    List<EhCommentParsed> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_eh_result_article_parsed(
+    List<EhResultArticleParsed> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_filter_article_input(
+    List<FilterArticleInput> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_filter_token_input(
+    List<FilterTokenInput> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_filtered_bubble_result(
     List<FilteredBubbleResult> self,
     SseSerializer serializer,
@@ -576,6 +811,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_glossary_entry(
     List<GlossaryEntry> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_list_String(
+    List<List<String>> self,
     SseSerializer serializer,
   );
 
@@ -621,6 +862,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_prim_u_8_strict(
     Uint8List self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_tag_count_item(
+    List<TagCountItem> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_tag_fuzzy_item(
+    List<TagFuzzyItem> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_tag_score_item(
+    List<TagScoreItem> self,
     SseSerializer serializer,
   );
 
@@ -682,6 +941,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_i_32(int? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_i_64(
+    PlatformInt64? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_mobile_search_filter(
     MobileSearchFilter? self,
     SseSerializer serializer,
@@ -701,9 +969,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_zero_ai_erase_result(
@@ -743,6 +1008,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     RestoredSearchToken self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_tag_count_item(TagCountItem self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_tag_fuzzy_item(TagFuzzyItem self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_tag_index_summary(
+    TagIndexSummary self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_tag_score_item(TagScoreItem self, SseSerializer serializer);
 
   @protected
   void sse_encode_text_box_input(TextBoxInput self, SseSerializer serializer);

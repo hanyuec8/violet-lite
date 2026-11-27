@@ -51,6 +51,7 @@ class _ToastWrapperState extends State<ToastWrapper>
       end: widget.reverse ? Offset.zero : const Offset(0.0, 1.0),
     ).animate(CurvedAnimation(parent: controller, curve: Curves.easeInOut));
     Future.delayed(const Duration(milliseconds: 100)).then((value) {
+      if (!mounted) return;
       controller.reverse(from: 0.8);
       setState(() {
         opacity = 1.0;
@@ -58,6 +59,7 @@ class _ToastWrapperState extends State<ToastWrapper>
       });
     });
     Future.delayed(const Duration(milliseconds: 3000)).then((value) {
+      if (!mounted) return;
       setState(() {
         opacity = 0.0;
         reverse = true;
@@ -98,58 +100,62 @@ class _ToastWrapperState extends State<ToastWrapper>
           ),
           child: SlideTransition(
             position: offset,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(25.0),
-              child: TweenAnimationBuilder<double>(
-                tween: Tween<double>(
-                  begin: reverse ? 10.0 : 0.1,
-                  end: reverse ? 0.001 : 10.0,
-                ),
-                duration: Duration(milliseconds: (reverse ? 500 : 700)),
-                builder: (_, value, child) {
-                  if (reverse && value < 0.1) return child!;
-                  return BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: value, sigmaY: value),
-                    child: child,
-                  );
-                },
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 500),
-                  opacity: opacity,
-                  curve: Curves.easeInOut,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24.0,
-                      vertical: 12.0,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Settings.themeWhat.value
-                          ? Colors.black.withOpacity(0.6)
-                          : Colors.grey.withOpacity(0.1),
-                    ),
-                    // decoration: BoxDecoration(
-                    //   borderRadius: BorderRadius.circular(25.0),
-                    //   color: widget.isCheck
-                    //       ? Colors.greenAccent.withOpacity(0.8)
-                    //       : widget.isWarning != null && widget.isWarning
-                    //           ? Colors.orangeAccent.withOpacity(0.8)
-                    //           : Colors.redAccent.withOpacity(0.8),
-                    // ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          widget.icon ??
-                              (widget.isCheck
-                                  ? Icons.check
-                                  : widget.isWarning
-                                  ? Icons.warning
-                                  : Icons.cancel),
-                          color: color,
-                        ),
-                        const SizedBox(width: 12.0),
-                        Text(widget.msg, style: TextStyle(color: color)),
-                      ],
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.sizeOf(context).width - 32,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(25.0),
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween<double>(
+                    begin: reverse ? 10.0 : 0.1,
+                    end: reverse ? 0.001 : 10.0,
+                  ),
+                  duration: Duration(milliseconds: (reverse ? 500 : 700)),
+                  builder: (_, value, child) {
+                    if (reverse && value < 0.1) return child!;
+                    return BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: value, sigmaY: value),
+                      child: child,
+                    );
+                  },
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 500),
+                    opacity: opacity,
+                    curve: Curves.easeInOut,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20.0,
+                        vertical: 12.0,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Settings.themeWhat.value
+                            ? Colors.black.withOpacity(0.6)
+                            : Colors.grey.withOpacity(0.1),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            widget.icon ??
+                                (widget.isCheck
+                                    ? Icons.check
+                                    : widget.isWarning
+                                    ? Icons.warning
+                                    : Icons.cancel),
+                            color: color,
+                          ),
+                          const SizedBox(width: 12.0),
+                          Flexible(
+                            child: Text(
+                              widget.msg,
+                              style: TextStyle(color: color),
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

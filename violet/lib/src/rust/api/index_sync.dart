@@ -6,12 +6,12 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `add_delta`, `apply_index_delta_sync`, `apply_row_to_maps`, `load_json_or_default`, `split_pipe`, `update_rel_pair`, `update_rel_tag`, `write_json_atomic`
+// These functions are ignored because they are not marked as `pub`: `add_delta`, `apply_index_delta_sync`, `apply_row_to_main_index`, `load_json_or_missing`, `process_rel_pair_file`, `process_rel_tag_file`, `split_pipe`, `update_rel_pair`, `update_rel_tag`, `write_json_atomic`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `ArticleIndexRow`, `MainIndexJson`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`
 // These functions are ignored (category: IgnoreBecauseOwnerTyShouldIgnore): `default`, `default`
 
-/// FRB 비동기 엔트리포인트: 변경 전/후 레코드 JSON을 받아 로컬 11종 태그 인덱스를 증분 갱신합니다.
+/// FRB 엔트리포인트: 변경 전/후 레코드 JSON을 받아 로컬 11종 태그 인덱스를 증분 갱신합니다.
 Future<IndexSyncStats> applyIndexDelta({
   required String dataDir,
   required String removedRowsJson,

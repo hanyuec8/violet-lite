@@ -13,10 +13,8 @@ class ImagePerceptualHash {
   /// Rust FFI(`rust_image_hash.computeDhash`)를 우선 호출하여 백그라운드 고속 연산을 수행합니다.
   static Future<int?> computeDHashFromBytes(Uint8List bytes) async {
     try {
-      final rustHash = rust_image_hash.computeDhash(bytes: bytes);
-      if (rustHash != null) {
-        return rustHash.toInt();
-      }
+      final rustHash = await rust_image_hash.computeDhash(bytes: bytes);
+      return rustHash.toInt();
     } catch (_) {}
 
     try {

@@ -137,6 +137,55 @@ class TagTranslate {
     );
   }
 
+  /// 번역 문자열 부분 일치에 해당하는 정규화 태그 키 목록(`group:name`)을 반환합니다.
+  static List<String> findMatchingKeysForLocalizedQuery(
+    String normQuery, {
+    String? field,
+  }) {
+    if (normQuery.isEmpty) return const [];
+    final keys = <String>[];
+
+    bool acceptKey(String fullKey) {
+      if (field == null) return true;
+      if (field == 'series') return fullKey.startsWith('series:');
+      if (field == 'character') return fullKey.startsWith('character:');
+      if (field == 'male') return fullKey.startsWith('male:');
+      if (field == 'female') return fullKey.startsWith('female:');
+      if (field == 'tag') {
+        return fullKey.startsWith('tag:') ||
+            fullKey.startsWith('female:') ||
+            fullKey.startsWith('male:');
+      }
+      return false;
+    }
+
+    for (final entry in _translateMap.entries) {
+      if (!acceptKey(entry.key)) continue;
+      final firstKor = entry.value.split('|').first.toLowerCase();
+      if (firstKor.contains(normQuery)) {
+        keys.add(entry.key.toLowerCase());
+      }
+    }
+
+    if (field == null || field == 'tag' || field == 'female' || field == 'male') {
+      for (final entry in TagTranslatedRegacy.tagMap.entries) {
+        if (entry.value.toLowerCase().contains(normQuery)) {
+          final k = entry.key.toLowerCase();
+          keys.add(k.contains(':') ? k : 'tag:$k');
+        }
+      }
+    }
+    if (field == null || field == 'series') {
+      for (final entry in TagTranslatedRegacy.seriesMap.entries) {
+        if (entry.value.toLowerCase().contains(normQuery)) {
+          keys.add('series:${entry.key.toLowerCase()}');
+        }
+      }
+    }
+
+    return keys;
+  }
+
   // [<Origin, Translated>]
   static List<DisplayedTag> contains(String part) {
     final cleanPart = part.replaceAll(' ', '').toLowerCase();

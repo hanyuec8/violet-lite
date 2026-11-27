@@ -3,7 +3,7 @@
 
 use std::{
     fs::File,
-    io::{copy, BufWriter, Read},
+    io::{copy, BufWriter, Read, Write},
     path::PathBuf,
 };
 
@@ -24,7 +24,7 @@ pub fn to_parent_entry_extract_fn(
     let path = dest;
     if let Some(p) = path.parent() {
         if !p.exists() {
-            let _ = std::fs::create_dir_all(p);
+            std::fs::create_dir_all(p).map_err(Error::io)?;
         }
     }
 
@@ -54,6 +54,7 @@ pub fn to_parent_entry_extract_fn(
 
     let mut writer = BufWriter::with_capacity(64 * 1024, file);
     copy(reader, &mut writer).map_err(Error::io)?;
+    writer.flush().map_err(Error::io)?;
 
     Ok(true)
 }
@@ -84,6 +85,7 @@ pub fn extract_7z_flat_to_dir(src: &str, dest_dir: &str) -> Result<Vec<String>, 
         if entry.size() > 0 {
             let mut writer = BufWriter::with_capacity(256 * 1024, file);
             copy(reader, &mut writer).map_err(Error::io)?;
+            writer.flush().map_err(Error::io)?;
         }
         extracted_files.push(to_path.to_string_lossy().to_string());
         Ok(true)

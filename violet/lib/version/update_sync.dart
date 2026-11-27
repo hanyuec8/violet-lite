@@ -13,10 +13,10 @@ class UpdateSyncManager {
 
   static bool enableSensitiveUpdate = true;
 
-  // Current app version (v2.2.8-lite)
+  // Current app version (v2.2.9-lite)
   static const int majorVersion = 2;
   static const int minorVersion = 2;
-  static const int patchVersion = 8;
+  static const int patchVersion = 9;
 
   static String get currentVersion =>
       '$majorVersion.$minorVersion.$patchVersion';

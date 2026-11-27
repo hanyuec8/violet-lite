@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `query_total_ram_mb`, `tokio_blocking_or_spawn`
+// These functions are ignored because they are not marked as `pub`: `query_total_ram_mb`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
 /// 기기 총 물리 메모리(MiB)를 조회합니다. 조회 실패 시 0을 반환합니다.

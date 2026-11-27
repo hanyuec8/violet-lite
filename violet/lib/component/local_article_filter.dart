@@ -1,10 +1,13 @@
 // This source code is a part of Project Violet.
 // Copyright (C) 2020-2026. violet-team. Licensed under the Apache-2.0 License.
 
+import 'package:flutter/foundation.dart';
 import 'package:violet/component/hangul_auto_restorer.dart';
 import 'package:violet/component/hitomi/tag_translate.dart';
 import 'package:violet/database/query.dart';
 import 'package:violet/settings/settings.dart';
+import 'package:violet/src/rust/api/article_filter.dart' as rust_filter;
+import 'package:violet/src/rust/frb_generated.dart';
 
 enum PageCompareOp { gt, gte, lt, lte, eq }
 
@@ -56,6 +59,14 @@ class LocalFilterToken {
 }
 
 class LocalArticleFilter {
+  static bool get _useRust {
+    try {
+      return RustLib.instance.initialized;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static const Set<String> _validFields = {
     'artist', 'tag', 'series', 'character', 'group', 'male',
     'female', 'lang', 'language', 'type', 'class', 'uploader', 'id',
@@ -336,6 +347,15 @@ class LocalArticleFilter {
       return articles;
     }
 
+    if (_useRust && articles.length >= 16) {
+      return filterViaRust(
+        articles,
+        tokens,
+        minPages: minPages,
+        maxPages: maxPages,
+      );
+    }
+
     return articles.where((article) {
       if (minPages != null || maxPages != null) {
         final pages = extractPageCount(article);
@@ -345,5 +365,89 @@ class LocalArticleFilter {
       }
       return tokens.every((t) => matchesToken(article, t));
     }).toList();
+  }
+
+  @visibleForTesting
+  static List<QueryResult> filterViaRust(
+    List<QueryResult> articles,
+    List<LocalFilterToken> tokens, {
+    int? minPages,
+    int? maxPages,
+  }) {
+    final rustArticles = articles.map((a) {
+      final rawId = a.result['Id'];
+      final id = rawId is num ? rawId.toInt() : int.tryParse(rawId?.toString() ?? '');
+      return rust_filter.FilterArticleInput(
+        id: id,
+        files: extractPageCount(a),
+        title: a.title()?.toString() ?? '',
+        artists: a.artists()?.toString() ?? '',
+        groups: a.groups()?.toString() ?? '',
+        series: a.series()?.toString() ?? '',
+        characters: a.characters()?.toString() ?? '',
+        tags: a.tags()?.toString() ?? '',
+        language: a.language()?.toString() ?? '',
+        articleType: a.type()?.toString() ?? '',
+        classname: a.classname()?.toString() ?? '',
+        uploader: a.uploader()?.toString() ?? '',
+      );
+    }).toList(growable: false);
+
+    final rustTokens = tokens.map((t) {
+      final opStr = switch (t.pageCondition?.operator) {
+        PageCompareOp.gt => '>',
+        PageCompareOp.gte => '>=',
+        PageCompareOp.lt => '<',
+        PageCompareOp.lte => '<=',
+        PageCompareOp.eq => '=',
+        null => null,
+      };
+      final translatedKeys = <String>{};
+      if (!t.isIdCondition &&
+          t.pageCondition == null &&
+          t.minPageRange == null &&
+          t.maxPageRange == null &&
+          (t.field == null ||
+              t.field == 'series' ||
+              t.field == 'character' ||
+              t.field == 'tag' ||
+              t.field == 'male' ||
+              t.field == 'female')) {
+        translatedKeys.addAll(
+          TagTranslate.findMatchingKeysForLocalizedQuery(
+            _normalizeVal(t.value),
+            field: t.field,
+          ),
+        );
+        if (t.restoredKoreanValue != null) {
+          translatedKeys.addAll(
+            TagTranslate.findMatchingKeysForLocalizedQuery(
+              _normalizeVal(t.restoredKoreanValue!),
+              field: t.field,
+            ),
+          );
+        }
+      }
+      return rust_filter.FilterTokenInput(
+        pageOp: opStr,
+        pageCount: t.pageCondition?.count,
+        minPageRange: t.minPageRange,
+        maxPageRange: t.maxPageRange,
+        isIdCondition: t.isIdCondition,
+        field: t.field,
+        value: t.value,
+        restoredKoreanValue: t.restoredKoreanValue,
+        translatedMatchKeys: translatedKeys.toList(growable: false),
+        negative: t.negative,
+      );
+    }).toList(growable: false);
+
+    final matchedIndices = rust_filter.filterArticlesBatchSync(
+      articles: rustArticles,
+      tokens: rustTokens,
+      minPages: minPages,
+      maxPages: maxPages,
+    );
+    return matchedIndices.map((idx) => articles[idx]).toList(growable: false);
   }
 }

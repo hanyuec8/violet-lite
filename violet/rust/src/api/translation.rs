@@ -123,8 +123,8 @@ impl MangaNormalizer {
 
         // 2. 어색한 끝맺음 다듬기
         let mut result = trimmed.to_string();
-        if result.ends_with("이다.") {
-            result = format!("{}야.", &result[..result.len() - 7]);
+        if let Some(stem) = result.strip_suffix("이다.") {
+            result = format!("{stem}야.");
         }
 
         result

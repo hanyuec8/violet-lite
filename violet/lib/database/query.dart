@@ -87,8 +87,8 @@ class QueryResult {
       final gb = groupOrder.indexOf(b.$1);
       if (ga != gb) return ga.compareTo(gb);
 
-      final na = HentaiIndex.tagCount?[a.$1]?[a.$2] ?? 0;
-      final nb = HentaiIndex.tagCount?[b.$1]?[b.$2] ?? 0;
+      final na = HentaiIndex.getCount(a.$1, a.$2);
+      final nb = HentaiIndex.getCount(b.$1, b.$2);
       return na.compareTo(nb);
     });
 

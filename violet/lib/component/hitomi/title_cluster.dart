@@ -7,6 +7,8 @@ import 'package:collection/collection.dart';
 import 'package:kdtree/kdtree.dart';
 import 'package:violet/algorithm/disjointset.dart';
 import 'package:violet/algorithm/distance.dart';
+import 'package:violet/src/rust/api/grouping.dart' as rust_grouping;
+import 'package:violet/src/rust/frb_generated.dart';
 
 class Idata {
   String title;
@@ -31,6 +33,14 @@ class Idata {
 // I want to cluster those things with only a difference of one or two.
 // Therefore, I don't use a clustering algorithm with a fixed number of kmc or em.
 class HitomiTitleCluster {
+  static bool get _useRust {
+    try {
+      return RustLib.instance.initialized;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static int _distance(dynamic a, dynamic b) {
     var astr = (a['t'].title as String).trim().replaceAll('(decensored)', '');
     var bstr = (b['t'].title as String).trim().replaceAll('(decensored)', '');
@@ -54,6 +64,12 @@ class HitomiTitleCluster {
 
   // This function compares and clusters the similarity of titles.
   static List<List<int>> doClustering(List<String> titles) {
+    if (_useRust) {
+      return rust_grouping
+          .clusterTitlesSync(titles: titles)
+          .map((g) => g.toList())
+          .toList();
+    }
     var ctitles = <Map<String, Idata>>[];
 
     for (int i = 0; i < titles.length; i++) {
@@ -108,6 +124,10 @@ class HitomiTitleCluster {
   static Future<List<List<int>>> doClusteringAsync(List<String> titles) async {
     if (titles.length <= 20) {
       return doClustering(titles);
+    }
+    if (_useRust) {
+      final groups = await rust_grouping.clusterTitles(titles: titles);
+      return groups.map((g) => g.toList()).toList();
     }
     return await Isolate.run(() => doClustering(titles));
   }

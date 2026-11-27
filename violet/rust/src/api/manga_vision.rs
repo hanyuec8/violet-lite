@@ -4,7 +4,6 @@
 use std::collections::VecDeque;
 use std::time::Instant;
 
-use image::imageops::FilterType;
 use image::{GrayImage, ImageFormat};
 use serde::{Deserialize, Serialize};
 
@@ -63,7 +62,6 @@ pub struct ZeroAiEraseResult {
 }
 
 /// 1단계: 원본 이미지 바이트를 1채널 그레이스케일(GrayImage)로 디코딩하고 긴 변 상한선으로 리사이징합니다.
-#[flutter_rust_bridge::frb(sync)]
 pub fn preprocess_manga_grayscale(
     bytes: Vec<u8>,
     max_long_edge: u32,
@@ -122,7 +120,6 @@ pub fn preprocess_manga_grayscale(
 }
 
 /// 2단계: 텍스트 바운딩 박스 외곽 테두리(2~4px 확장 링)의 밝기 히스토그램으로 말풍선과 배경/효과음을 분리합니다.
-#[flutter_rust_bridge::frb(sync)]
 pub fn filter_speech_bubbles(
     luma_bytes: Vec<u8>,
     width: u32,
@@ -206,7 +203,6 @@ pub fn filter_speech_bubbles(
 }
 
 /// 3단계: Zero-AI 고속 글자 지우기 (Connected Components 기반 테두리 선화 보존 + 내부 글자 흰색/검정색 채우기)
-#[flutter_rust_bridge::frb(sync)]
 pub fn erase_bubble_text_zero_ai(
     mut luma_bytes: Vec<u8>,
     width: u32,
@@ -368,7 +364,6 @@ pub struct PreprocessAndDetectResult {
 }
 
 /// 1채널 그레이스케일 버퍼에서 520px 다운샘플링 + 밝은 영역(>=220) BFS로 흰 말풍선 바운딩 박스 검출
-#[flutter_rust_bridge::frb(sync)]
 pub fn detect_white_bubbles_sync(
     luma_bytes: Vec<u8>,
     width: u32,
@@ -532,7 +527,6 @@ fn detect_white_bubbles_inner(luma_bytes: &[u8], width: u32, height: u32) -> Vec
 }
 
 /// 1회 이미지 디코딩 + 1채널 그레이스케일 리사이징 + 흰 말풍선 BFS 검출 통합 파이프라인
-#[flutter_rust_bridge::frb(sync)]
 pub fn preprocess_and_detect_bubbles_sync(
     bytes: Vec<u8>,
     max_long_edge: u32,
@@ -610,7 +604,7 @@ fn strip_border_artwork_luma(crop: &mut [u8], w: usize, h: usize) {
 }
 
 /// 말풍선 영역을 잘라 외곽 검은 테두리를 제거한 뒤 Manga-OCR용 224x224 1채널 버퍼로 변환 (Dart 픽셀 루프 0)
-#[flutter_rust_bridge::frb(sync)]
+#[allow(clippy::too_many_arguments)]
 pub fn crop_bubble_for_manga_ocr_sync(
     luma_bytes: Vec<u8>,
     width: u32,
@@ -656,7 +650,6 @@ pub fn crop_bubble_for_manga_ocr_sync(
 }
 
 /// 말풍선 영역에서 외곽 테두리를 제거하고 가로쓰기 줄 단위로 분할해 반환 (PP-OCRv5 EN/ZH용)
-#[flutter_rust_bridge::frb(sync)]
 pub fn extract_horizontal_line_crops_sync(
     luma_bytes: Vec<u8>,
     width: u32,
@@ -750,7 +743,6 @@ pub fn extract_horizontal_line_crops_sync(
 }
 
 /// 1채널 그레이스케일 버퍼를 PNG 바이트로 인코딩합니다 (디버깅 및 뷰어 오버레이 합성용).
-#[flutter_rust_bridge::frb(sync)]
 pub fn encode_luma_to_png(luma_bytes: Vec<u8>, width: u32, height: u32) -> Option<Vec<u8>> {
     let img = GrayImage::from_raw(width, height, luma_bytes)?;
     let mut out = Vec::new();

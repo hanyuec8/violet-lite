@@ -19,7 +19,9 @@ import 'package:violet/log/log.dart';
 import 'package:violet/network/wrapper.dart' as http;
 import 'package:violet/script/script_manager.dart';
 import 'package:violet/settings/settings.dart';
+import 'package:violet/src/rust/api/grouping.dart' as rust_grouping;
 import 'package:violet/src/rust/api/nozomi.dart' as rust_nozomi;
+import 'package:violet/src/rust/frb_generated.dart';
 
 /// 고정 용량 초과 시 가장 오래된 항목을 자동 제거하는 경량 LRU 맵
 class _LruMap<K, V> {
@@ -356,8 +358,19 @@ class HybridLoader {
     return finalResults;
   }
 
+  static bool get _useRustGrouping {
+    try {
+      return RustLib.instance.initialized;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// 제목 정규화 유틸리티 (특수문자, 괄호, 이벤트명, 언어태그 제거)
   static String normalizeTitle(String raw) {
+    if (_useRustGrouping) {
+      return rust_grouping.normalizeTitleSync(raw: raw);
+    }
     var s = raw
         .replaceAll(RegExp(r'\[.*?\]'), ' ')
         .replaceAll(RegExp(r'\(.*?\)'), ' ')
@@ -370,6 +383,9 @@ class HybridLoader {
   /// 제목에서 서브타이틀(|, /, :) 등을 고려하여 정규화된 토큰 목록을 추출합니다.
   static List<String> extractTitleTokens(String raw) {
     if (raw.trim().isEmpty) return [];
+    if (_useRustGrouping) {
+      return rust_grouping.extractTitleTokensSync(raw: raw);
+    }
     final results = <String>{};
 
     // 1. 파이프(|), 슬래시(/), 하이픈(-) 등 서브타이틀 분리자로 분할
@@ -393,6 +409,9 @@ class HybridLoader {
   /// 두 제목이 동일하거나 동일 작품의 변형인지 정밀 대조합니다.
   static bool isTitleMatched(String rawA, String rawB) {
     if (rawA.isEmpty || rawB.isEmpty) return false;
+    if (_useRustGrouping) {
+      return rust_grouping.isTitleMatchedSync(rawA: rawA, rawB: rawB);
+    }
     final fullA = normalizeTitle(rawA);
     final fullB = normalizeTitle(rawB);
     if (fullA.length >= 3 && fullA == fullB) return true;

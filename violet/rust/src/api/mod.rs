@@ -10,3 +10,7 @@ pub mod message_search;
 pub mod index_sync;
 pub mod translation;
 pub mod manga_vision;
+pub mod html_parser;
+pub mod article_filter;
+pub mod grouping;
+pub mod tag_index_store;

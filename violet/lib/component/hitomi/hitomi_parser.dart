@@ -4,10 +4,35 @@
 import 'package:flutter/foundation.dart';
 import 'package:html/dom.dart';
 import 'package:html/parser.dart';
+import 'package:violet/src/rust/api/html_parser.dart' as rust_html;
+import 'package:violet/src/rust/frb_generated.dart';
 
 class HitomiParser {
+  static bool get _useRust {
+    try {
+      return RustLib.instance.initialized;
+    } catch (_) {
+      return false;
+    }
+  }
+
   // Extract metadata from galleryblock HTML.
   static Future<Map<String, dynamic>> parseGalleryBlock(String html) async {
+    if (_useRust) {
+      final parsed = await rust_html.parseHitomiGalleryBlock(html: html);
+      return {
+        'Magic': parsed.magic,
+        'Thumbnail': parsed.thumbnail,
+        'Title': parsed.title,
+        'Artists': parsed.artists,
+        'Series': parsed.series,
+        'Type': parsed.articleType,
+        'Language': parsed.language,
+        'Tags': parsed.tags,
+        'Published': parsed.published,
+      };
+    }
+
     var doc = (await compute(parse, html)).querySelector('div');
 
     var title = doc!.querySelector('h1')!.text.trim();
@@ -63,6 +88,14 @@ class HitomiParser {
   }
 
   static Future<Map<String, dynamic>> parseGallery(String html) async {
+    if (_useRust) {
+      final parsed = await rust_html.parseHitomiGallery(html: html);
+      return {
+        if (parsed.groups.isNotEmpty) 'Groups': parsed.groups,
+        if (parsed.characters.isNotEmpty) 'Characters': parsed.characters,
+      };
+    }
+
     final doc = await compute(parse, html);
     final result = <String, dynamic>{};
 

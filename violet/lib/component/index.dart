@@ -16,6 +16,8 @@ import 'package:violet/settings/settings.dart';
 import 'package:violet/component/hitomi/tag_translate.dart';
 import 'package:violet/database/database.dart';
 import 'package:violet/log/log.dart';
+import 'package:violet/src/rust/api/tag_index_store.dart' as rust_tag_store;
+import 'package:violet/src/rust/frb_generated.dart';
 import 'package:violet/variables.dart';
 
 // This is used for estimation similiar Aritst/Group/Uplaoder with each others.
@@ -48,6 +50,17 @@ class HentaiIndex {
   // Tag, [<Tag, Similarity>]
   static Map<String, dynamic> relatedTag = <String, dynamic>{};
 
+  static bool get _useRust {
+    try {
+      return RustLib.instance.initialized;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static bool get _rustStoreReady =>
+      _useRust && rust_tag_store.tagIndexIsLoaded();
+
   /// 특정 태그 그룹과 태그 이름에 해당하는 카운트를 안전하게 반환합니다.
   /// 데이터가 없거나 group/name이 null인 경우 0을 반환하여 런타임 에러를 방지합니다.
   static int getCount(String? group, String? name) {
@@ -61,6 +74,11 @@ class HentaiIndex {
       if (count is String) {
         return int.tryParse(count) ?? 0;
       }
+    }
+    if (tagCount == null && _rustStoreReady) {
+      return rust_tag_store
+          .tagIndexGetCount(classification: group, name: name)
+          .toInt();
     }
     return 0;
   }
@@ -89,6 +107,11 @@ class HentaiIndex {
         }
       }
       return result;
+    }
+    if (tagCount == null && _rustStoreReady) {
+      final items = rust_tag_store.tagIndexGetGroupCounts(group: group);
+      if (items.isEmpty) return null;
+      return {for (final item in items) item.name: item.count.toInt()};
     }
     return null;
   }
@@ -144,6 +167,23 @@ class HentaiIndex {
         ? join(Directory.current.path, 'test/db')
         : (await getApplicationDocumentsDirectory()).path;
 
+    if (_useRust) {
+      try {
+        await rust_tag_store.tagIndexLoad(
+          baseDir: baseDir,
+          isAndroid:
+              !Platform.environment.containsKey('FLUTTER_TEST') &&
+              Platform.isAndroid,
+        );
+      } catch (e, st) {
+        Logger.error('[Hitomi-Indexes] Rust store load error: $e\n$st');
+      }
+      if (rust_tag_store.tagIndexIsLoaded()) {
+        await _loadRelatedTagsAsset();
+        return;
+      }
+    }
+
     // No data on first run.
     final path2 = _resolveFile(baseDir, 'tag-artist.json');
     if (!await path2.exists()) return;
@@ -192,6 +232,28 @@ class HentaiIndex {
       return;
     }
 
+    await _loadRelatedTagsAsset();
+  }
+
+  static Future<void> _loadRelatedTagsAsset() async {
+    if (Platform.environment.containsKey('FLUTTER_TEST')) {
+      final relFile = File(
+        join(
+          Directory.current.path,
+          'assets/locale/tag/related-tag-${TagTranslate.defaultLanguage}.json',
+        ),
+      );
+      if (!await relFile.exists()) return;
+      final relatedData =
+          json.decode(await relFile.readAsString()) as List<dynamic>;
+      relatedTag = <String, dynamic>{};
+      for (var element in relatedData) {
+        var kv = (element as Map<String, dynamic>).entries.first;
+        relatedTag[kv.key] = kv.value;
+      }
+      return;
+    }
+
     var relatedData =
         json.decode(
               await rootBundle.loadString(
@@ -207,6 +269,21 @@ class HentaiIndex {
   }
 
   static Future<void> _loadCountMap() async {
+    if (_useRust) {
+      final baseDir = Platform.environment.containsKey('FLUTTER_TEST')
+          ? join(Directory.current.path, 'test/db')
+          : (await getApplicationDocumentsDirectory()).path;
+      await rust_tag_store.tagIndexLoad(
+        baseDir: baseDir,
+        isAndroid:
+            !Platform.environment.containsKey('FLUTTER_TEST') &&
+            Platform.isAndroid,
+      );
+      if (rust_tag_store.tagIndexIsLoaded()) {
+        tagCount = null;
+        return;
+      }
+    }
     if (Platform.environment.containsKey('FLUTTER_TEST')) {
       final file = File(join(Directory.current.path, 'test/db/index.json'));
       tagCount = jsonDecode(await file.readAsString());
@@ -239,13 +316,20 @@ class HentaiIndex {
   }
 
   static Future<void> loadCountMapIfRequired() async {
-    if (tagCount == null) {
+    if (tagCount == null && !_rustStoreReady) {
       await _loadCountMap();
     }
   }
 
   static int getArticleCount(String classification, String name) {
-    if (tagCount == null) {
+    if (tagCount == null && _rustStoreReady) {
+      final rustCount = rust_tag_store
+          .tagIndexGetCount(classification: classification, name: name)
+          .toInt();
+      if (rustCount > 0) return rustCount;
+    }
+
+    if (tagCount == null && !_rustStoreReady) {
       try {
         final path = _resolveFile(
           Variables.applicationDocumentsDirectory,
@@ -324,7 +408,13 @@ class HentaiIndex {
     if (group == 'lang') {
       final nameCountsMap = (tagCount != null && tagCount!.containsKey('lang'))
           ? (tagCount!['lang'] as Map<dynamic, dynamic>)
-          : <dynamic, dynamic>{};
+          : (tagCount == null && _rustStoreReady
+              ? {
+                  for (final item
+                      in rust_tag_store.tagIndexGetGroupCounts(group: 'lang'))
+                    item.name: item.count.toInt(),
+                }
+              : <dynamic, dynamic>{});
 
       final cleanName = name.trim().toLowerCase();
 
@@ -364,8 +454,14 @@ class HentaiIndex {
     }
 
     final seen = <String>{};
-    if (tagCount != null && tagCount!.containsKey(group)) {
-      final nameCountsMap = tagCount![group] as Map<dynamic, dynamic>;
+    final rustGroupMap = (tagCount == null && _rustStoreReady)
+        ? getGroupMap(group)
+        : null;
+    final activeGroupMap = (tagCount != null && tagCount!.containsKey(group))
+        ? (tagCount![group] as Map<dynamic, dynamic>)
+        : rustGroupMap;
+    if (activeGroupMap != null) {
+      final nameCountsMap = activeGroupMap;
       // 1) TagTranslate를 통해 영문/한글 매칭 결과 추가 (번역명 포함)
       final transMatches = TagTranslate.containsTotal(name)
           .where((e) => e.group! == group || (group == 'tag' && (e.group == 'female' || e.group == 'male')));
@@ -443,7 +539,9 @@ class HentaiIndex {
     }
 
     // tagCount가 없거나 매칭 결과가 부족할 때 TagTranslate에서 직접 보충
-    if (results.isEmpty || tagCount == null || !tagCount!.containsKey(group)) {
+    if (results.isEmpty ||
+        (activeGroupMap == null &&
+            (tagCount == null || !tagCount!.containsKey(group)))) {
       final matches = TagTranslate.containsTotal(name)
           .where((e) => e.group == group || (group == 'tag' && (e.group == 'female' || e.group == 'male')));
       for (final tag in matches) {
@@ -543,6 +641,8 @@ class HentaiIndex {
           });
         }
       });
+    } else if (_rustStoreReady) {
+      _appendFromRustStore(prefix, results, seen);
     }
 
     // 3. 내장 아티스트 사전 매칭
@@ -564,6 +664,28 @@ class HentaiIndex {
 
     _sortAutoCompleteResults(results, prefix);
     return results;
+  }
+
+  static void _appendFromRustStore(
+    String query,
+    List<(DisplayedTag, int)> results,
+    Set<String> seen,
+  ) {
+    for (final item
+        in rust_tag_store.tagIndexSearchContains(group: null, query: query)) {
+      final key = '${item.group}:${item.name}';
+      if (!seen.contains(key)) {
+        seen.add(key);
+        results.add((
+          DisplayedTag(
+            group: item.group,
+            name: item.name,
+            translated: TagTranslate.of(item.group, item.name),
+          ),
+          item.count.toInt(),
+        ));
+      }
+    }
   }
 
   static void _appendFromBuiltinArtists(
@@ -724,6 +846,8 @@ class HentaiIndex {
           });
         }
       });
+    } else if (_rustStoreReady) {
+      _appendFromRustStore(clean, results, seen);
     }
 
     // 3. 내장 아티스트 사전 (Artists.collection)
@@ -875,6 +999,21 @@ class HentaiIndex {
 
       // <Tag, Similarity, Count>
       final results = <(DisplayedTag, int, int)>[];
+      if (!useTranslated && tagCount == null && _rustStoreReady) {
+        return rust_tag_store
+            .tagIndexSearchFuzzy(group: group, query: name, limit: 200)
+            .map(
+              (e) => (
+                DisplayedTag(
+                  group: e.group,
+                  name: e.name,
+                  translated: TagTranslate.of(e.group, e.name),
+                ),
+                e.count.toInt(),
+              ),
+            )
+            .toList();
+      }
       if (tagCount != null && tagCount!.containsKey(group)) {
         final nameCountsMap = tagCount![group];
         if (!useTranslated) {
@@ -915,6 +1054,21 @@ class HentaiIndex {
       results.sort((a, b) => a.$2.compareTo(b.$2));
       return results.map((e) => (e.$1, e.$3)).toList();
     } else {
+      if (!useTranslated && tagCount == null && _rustStoreReady) {
+        return rust_tag_store
+            .tagIndexSearchFuzzy(group: null, query: prefix, limit: 200)
+            .map(
+              (e) => (
+                DisplayedTag(
+                  group: e.group,
+                  name: e.name,
+                  translated: TagTranslate.of(e.group, e.name),
+                ),
+                e.count.toInt(),
+              ),
+            )
+            .toList();
+      }
       if (tagCount != null && !useTranslated) {
         final results = <(DisplayedTag, int, int)>[];
         tagCount!.forEach((group, value) {
@@ -988,26 +1142,70 @@ class HentaiIndex {
   }
 
   static List<(String, double)> calculateSimilarArtists(String artist) {
+    if (tagArtist.isEmpty && _rustStoreReady) {
+      return rust_tag_store
+          .tagIndexCalculateSimilars(kind: 'artist', key: artist)
+          .map((e) => (e.key, e.score))
+          .toList();
+    }
     return _calculateSimilars(tagArtist, artist);
   }
 
   static List<(String, double)> calculateSimilarGroups(String group) {
+    if (tagGroup.isEmpty && _rustStoreReady) {
+      return rust_tag_store
+          .tagIndexCalculateSimilars(kind: 'group', key: group)
+          .map((e) => (e.key, e.score))
+          .toList();
+    }
     return _calculateSimilars(tagGroup, group);
   }
 
   static List<(String, double)> calculateSimilarUploaders(String uploader) {
+    if (tagUploader.isEmpty && _rustStoreReady) {
+      return rust_tag_store
+          .tagIndexCalculateSimilars(kind: 'uploader', key: uploader)
+          .map((e) => (e.key, e.score))
+          .toList();
+    }
     return _calculateSimilars(tagUploader, uploader);
   }
 
   static List<(String, double)> calculateSimilarSeries(String series) {
+    if (tagSeries.isEmpty && _rustStoreReady) {
+      return rust_tag_store
+          .tagIndexCalculateSimilars(kind: 'series', key: series)
+          .map((e) => (e.key, e.score))
+          .toList();
+    }
     return _calculateSimilars(tagSeries, series);
   }
 
   static List<(String, double)> calculateSimilarCharacter(String character) {
+    if (tagCharacter.isEmpty && _rustStoreReady) {
+      return rust_tag_store
+          .tagIndexCalculateSimilars(kind: 'character', key: character)
+          .map((e) => (e.key, e.score))
+          .toList();
+    }
     return _calculateSimilars(tagCharacter, character);
   }
 
   static List<(String, double)> calculateRelatedCharacterSeries(String series) {
+    if (seriesSeries == null && characterSeries == null && _rustStoreReady) {
+      final pairs = rust_tag_store.tagIndexGetRelatedPairs(
+        kind: 'series_series',
+        key: series,
+      );
+      if (pairs.isNotEmpty) {
+        return pairs.map((e) => (e.key, e.score)).toList();
+      }
+      return rust_tag_store
+          .tagIndexCalculateSimilars(kind: 'character_series', key: series)
+          .where((e) => e.score >= 0.000001)
+          .map((e) => (e.key, e.score))
+          .toList();
+    }
     if (seriesSeries == null) {
       return _calculateSimilars(
         characterSeries!,
@@ -1025,6 +1223,22 @@ class HentaiIndex {
   static List<(String, double)> calculateRelatedSeriesCharacter(
     String character,
   ) {
+    if (characterCharacter == null &&
+        seriesCharacter == null &&
+        _rustStoreReady) {
+      final pairs = rust_tag_store.tagIndexGetRelatedPairs(
+        kind: 'character_character',
+        key: character,
+      );
+      if (pairs.isNotEmpty) {
+        return pairs.map((e) => (e.key, e.score)).toList();
+      }
+      return rust_tag_store
+          .tagIndexCalculateSimilars(kind: 'series_character', key: character)
+          .where((e) => e.score >= 0.000001)
+          .map((e) => (e.key, e.score))
+          .toList();
+    }
     if (characterCharacter == null) {
       return _calculateSimilars(
         seriesCharacter!,
@@ -1040,6 +1254,12 @@ class HentaiIndex {
   }
 
   static List<(String, double)> getRelatedCharacters(String series) {
+    if (characterSeries == null && _rustStoreReady) {
+      return rust_tag_store
+          .tagIndexGetRelatedPairs(kind: 'character_series', key: series)
+          .map((e) => (e.key, e.score))
+          .toList();
+    }
     if (!characterSeries!.containsKey(series)) {
       return <(String, double)>[];
     }
@@ -1051,6 +1271,12 @@ class HentaiIndex {
   }
 
   static List<(String, double)> getRelatedSeries(String character) {
+    if (seriesCharacter == null && _rustStoreReady) {
+      return rust_tag_store
+          .tagIndexGetRelatedPairs(kind: 'series_character', key: character)
+          .map((e) => (e.key, e.score))
+          .toList();
+    }
     if (!seriesCharacter!.containsKey(character)) {
       return <(String, double)>[];
     }

@@ -10,7 +10,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// 1단계: 원본 이미지 바이트를 1채널 그레이스케일(GrayImage)로 디코딩하고 긴 변 상한선으로 리사이징합니다.
-PreprocessedMangaPage? preprocessMangaGrayscale({
+Future<PreprocessedMangaPage?> preprocessMangaGrayscale({
   required List<int> bytes,
   required int maxLongEdge,
 }) => RustLib.instance.api.crateApiMangaVisionPreprocessMangaGrayscale(
@@ -19,7 +19,7 @@ PreprocessedMangaPage? preprocessMangaGrayscale({
 );
 
 /// 2단계: 텍스트 바운딩 박스 외곽 테두리(2~4px 확장 링)의 밝기 히스토그램으로 말풍선과 배경/효과음을 분리합니다.
-List<FilteredBubbleResult> filterSpeechBubbles({
+Future<List<FilteredBubbleResult>> filterSpeechBubbles({
   required List<int> lumaBytes,
   required int width,
   required int height,
@@ -38,7 +38,7 @@ List<FilteredBubbleResult> filterSpeechBubbles({
 );
 
 /// 3단계: Zero-AI 고속 글자 지우기 (Connected Components 기반 테두리 선화 보존 + 내부 글자 흰색/검정색 채우기)
-ZeroAiEraseResult? eraseBubbleTextZeroAi({
+Future<ZeroAiEraseResult?> eraseBubbleTextZeroAi({
   required List<int> lumaBytes,
   required int width,
   required int height,
@@ -53,7 +53,7 @@ ZeroAiEraseResult? eraseBubbleTextZeroAi({
 );
 
 /// 1채널 그레이스케일 버퍼에서 520px 다운샘플링 + 밝은 영역(>=220) BFS로 흰 말풍선 바운딩 박스 검출
-List<TextBoxInput> detectWhiteBubblesSync({
+Future<List<TextBoxInput>> detectWhiteBubblesSync({
   required List<int> lumaBytes,
   required int width,
   required int height,
@@ -64,7 +64,7 @@ List<TextBoxInput> detectWhiteBubblesSync({
 );
 
 /// 1회 이미지 디코딩 + 1채널 그레이스케일 리사이징 + 흰 말풍선 BFS 검출 통합 파이프라인
-PreprocessAndDetectResult? preprocessAndDetectBubblesSync({
+Future<PreprocessAndDetectResult?> preprocessAndDetectBubblesSync({
   required List<int> bytes,
   required int maxLongEdge,
 }) => RustLib.instance.api.crateApiMangaVisionPreprocessAndDetectBubblesSync(
@@ -73,7 +73,7 @@ PreprocessAndDetectResult? preprocessAndDetectBubblesSync({
 );
 
 /// 말풍선 영역을 잘라 외곽 검은 테두리를 제거한 뒤 Manga-OCR용 224x224 1채널 버퍼로 변환 (Dart 픽셀 루프 0)
-Uint8List? cropBubbleForMangaOcrSync({
+Future<Uint8List?> cropBubbleForMangaOcrSync({
   required List<int> lumaBytes,
   required int width,
   required int height,
@@ -94,7 +94,7 @@ Uint8List? cropBubbleForMangaOcrSync({
 );
 
 /// 말풍선 영역에서 외곽 테두리를 제거하고 가로쓰기 줄 단위로 분할해 반환 (PP-OCRv5 EN/ZH용)
-List<CleanedLineCrop> extractHorizontalLineCropsSync({
+Future<List<CleanedLineCrop>> extractHorizontalLineCropsSync({
   required List<int> lumaBytes,
   required int width,
   required int height,
@@ -113,7 +113,7 @@ List<CleanedLineCrop> extractHorizontalLineCropsSync({
 );
 
 /// 1채널 그레이스케일 버퍼를 PNG 바이트로 인코딩합니다 (디버깅 및 뷰어 오버레이 합성용).
-Uint8List? encodeLumaToPng({
+Future<Uint8List?> encodeLumaToPng({
   required List<int> lumaBytes,
   required int width,
   required int height,

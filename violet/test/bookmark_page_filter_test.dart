@@ -109,5 +109,43 @@ void main() {
         equals([101]),
       );
     });
+
+    test('supports simultaneous include and exclude tags (A included, B excluded)', () {
+      final controller = FilterController();
+      controller.setTagState('female|elf', TagFilterState.include);
+      controller.setTagState('female|sole female', TagFilterState.exclude);
+
+      final filtered = controller.applyFilter(sampleBookmarks);
+      expect(filtered.map((e) => e.id()), equals([103, 104]));
+    });
+
+    test('exclude takes precedence even when isOr is enabled', () {
+      final controller = FilterController()..isOr = true;
+      controller.setTagState('female|elf', TagFilterState.include);
+      controller.setTagState('tag|full color', TagFilterState.include);
+      controller.setTagState('artist|nishi', TagFilterState.exclude);
+
+      // 101 and 103 match female:elf but have artist nishi -> excluded
+      // 102 matches full color, 104 matches female:elf (beta) -> kept
+      final filtered = controller.applyFilter(sampleBookmarks);
+      expect(filtered.map((e) => e.id()), equals([102, 104]));
+    });
+
+    test('cycleTagState and toggleExcludeTag transition cleanly and resetAll clears', () {
+      final controller = FilterController();
+      expect(controller.getTagState('female|elf'), TagFilterState.none);
+      expect(controller.cycleTagState('female|elf'), TagFilterState.include);
+      expect(controller.includedTagKeys, equals(['female|elf']));
+      expect(controller.cycleTagState('female|elf'), TagFilterState.exclude);
+      expect(controller.includedTagKeys, isEmpty);
+      expect(controller.excludedTagKeys, equals(['female|elf']));
+      expect(controller.cycleTagState('female|elf'), TagFilterState.none);
+      expect(controller.hasAnyActiveFilter, isFalse);
+
+      expect(controller.toggleExcludeTag('male|shota'), TagFilterState.exclude);
+      expect(controller.activeFilterCount, equals(1));
+      controller.resetAll();
+      expect(controller.hasAnyActiveFilter, isFalse);
+    });
   });
 }

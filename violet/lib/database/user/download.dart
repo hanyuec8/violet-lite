@@ -205,35 +205,56 @@ class DownloadItemModel {
     return rfiles;
   }
 
-  String? tryThumbnailFile() {
-    final explicitThumb = localThumbnail();
-    if (explicitThumb != null && explicitThumb.isNotEmpty) {
-      if (File(explicitThumb).existsSync()) {
-        return explicitThumb;
+  /// 로컬 썸네일 후보 파일 목록을 우선순위에 따라 중복 없이 반환합니다.
+  List<String> candidateThumbnailFiles() {
+    final candidates = <String>[];
+    final seen = <String>{};
+
+    void tryAdd(String? filePath) {
+      if (filePath == null || filePath.isEmpty || !seen.add(filePath)) {
+        return;
       }
+      try {
+        final f = File(filePath);
+        if (f.existsSync() && f.lengthSync() >= 5) {
+          candidates.add(filePath);
+        }
+      } catch (_) {}
     }
+
+    tryAdd(localThumbnail());
 
     final rfiles = rawFiles();
     for (final element in rfiles) {
-      if (p.basename(element).toLowerCase().startsWith('thumbnail') &&
-          File(element).existsSync()) {
-        return element;
+      if (p.basename(element).toLowerCase().startsWith('thumbnail')) {
+        tryAdd(element);
       }
     }
 
-    // 로컬 썸네일이 없다면 첫 번째 다운로드된 페이지를 썸네일로 사용
-    for (final element in rfiles) {
-      if (File(element).existsSync()) {
-        return element;
+    // 로컬 썸네일이 없거나 손상된 경우를 대비해 앞쪽 페이지 파일들도 후보에 포함
+    int pageFallbackCount = 0;
+    for (final element in filesWithoutThumbnail()) {
+      if (pageFallbackCount >= 3) break;
+      final before = candidates.length;
+      tryAdd(element);
+      if (candidates.length > before) {
+        pageFallbackCount++;
       }
     }
-    return null;
+
+    return candidates;
+  }
+
+  String? tryThumbnailFile() {
+    final candidates = candidateThumbnailFiles();
+    return candidates.isNotEmpty ? candidates.first : null;
   }
 }
 
 class Download {
   static Download? _instance;
   static Lock lock = Lock();
+  final Lock _createLock = Lock();
 
   static Future<Download> getInstance() async {
     await lock.synchronized(() async {
@@ -372,23 +393,25 @@ class Download {
     String? thumbnail,
     String? thumbnailHeader,
   }) async {
-    final rr = <String, dynamic>{
-      'URL': url,
-      'State': 1,
-      'DateTime': DateTime.now().toString(),
-      if (info != null) 'Info': info,
-      if (thumbnail != null) 'Thumbnail': thumbnail,
-      if (thumbnailHeader != null) 'ThumbnailHeader': thumbnailHeader,
-      if (queryResult != null) 'Metadata': jsonEncode(queryResult.result),
-    };
-    var db = await CommonUserDatabase.getInstance();
-    await db.insert('DownloadItem', rr);
-    var ll = (await db.query(
-      'SELECT * FROM DownloadItem ORDER BY Id DESC LIMIT 1',
-    ))[0];
-    final model = DownloadItemModel(result: Map<String, dynamic>.from(ll));
-    model.queryResult = queryResult;
-    return model;
+    return _createLock.synchronized(() async {
+      final rr = <String, dynamic>{
+        'URL': url,
+        'State': 1,
+        'DateTime': DateTime.now().toString(),
+        if (info != null) 'Info': info,
+        if (thumbnail != null) 'Thumbnail': thumbnail,
+        if (thumbnailHeader != null) 'ThumbnailHeader': thumbnailHeader,
+        if (queryResult != null) 'Metadata': jsonEncode(queryResult.result),
+      };
+      var db = await CommonUserDatabase.getInstance();
+      await db.insert('DownloadItem', rr);
+      var ll = (await db.query(
+        'SELECT * FROM DownloadItem ORDER BY Id DESC LIMIT 1',
+      ))[0];
+      final model = DownloadItemModel(result: Map<String, dynamic>.from(ll));
+      model.queryResult = queryResult;
+      return model;
+    });
   }
 
   Future<void> clear() async {

@@ -90,14 +90,13 @@ fn add_delta(map: &mut CountMap, key: &str, delta: i64) {
     }
 }
 
-fn load_json_or_default<T: for<'de> Deserialize<'de> + Default>(path: &Path) -> T {
-    if !path.exists() {
-        return T::default();
+fn load_json_or_missing<T: for<'de> Deserialize<'de> + Default>(path: &Path) -> Result<T, String> {
+    match fs::read_to_string(path) {
+        Ok(s) => serde_json::from_str::<T>(&s)
+            .map_err(|e| format!("corrupted json '{}': {e}", path.display())),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(T::default()),
+        Err(e) => Err(format!("failed to read '{}': {e}", path.display())),
     }
-    fs::read_to_string(path)
-        .ok()
-        .and_then(|s| serde_json::from_str::<T>(&s).ok())
-        .unwrap_or_default()
 }
 
 fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
@@ -108,7 +107,13 @@ fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<(), String>
     }
     let tmp = path.with_extension("json.tmp");
     let bytes = serde_json::to_vec(value).map_err(|e| format!("serialize failed: {e}"))?;
-    fs::write(&tmp, bytes).map_err(|e| format!("write tmp failed: {e}"))?;
+    {
+        use std::io::Write;
+        let mut f = fs::File::create(&tmp).map_err(|e| format!("create tmp failed: {e}"))?;
+        f.write_all(&bytes)
+            .map_err(|e| format!("write tmp failed: {e}"))?;
+        f.sync_all().map_err(|e| format!("sync tmp failed: {e}"))?;
+    }
     fs::rename(&tmp, path).map_err(|e| format!("atomic rename failed: {e}"))
 }
 
@@ -169,23 +174,7 @@ fn update_rel_pair(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn apply_row_to_maps(
-    row: &ArticleIndexRow,
-    delta: i64,
-    main_idx: &mut MainIndexJson,
-    tag_index: &mut HashMap<String, usize>,
-    next_tag_idx: &mut usize,
-    tag_artist: &mut NestedCountMap,
-    tag_group: &mut NestedCountMap,
-    tag_uploader: &mut NestedCountMap,
-    tag_series: &mut NestedCountMap,
-    tag_character: &mut NestedCountMap,
-    character_series: &mut NestedCountMap,
-    series_character: &mut NestedCountMap,
-    series_series: &mut NestedCountMap,
-    character_character: &mut NestedCountMap,
-) {
+fn apply_row_to_main_index(row: &ArticleIndexRow, delta: i64, main_idx: &mut MainIndexJson) {
     for t in split_pipe(&row.tags) {
         add_delta(&mut main_idx.tag, t, delta);
     }
@@ -213,19 +202,52 @@ fn apply_row_to_maps(
     if let Some(cl) = row.class_name.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
         add_delta(&mut main_idx.class_name, cl, delta);
     }
+}
 
-    if row.tags.as_deref().is_some_and(|s| !s.is_empty()) {
-        update_rel_tag(&row.artists, &row.tags, tag_index, next_tag_idx, tag_artist, delta);
-        update_rel_tag(&row.groups, &row.tags, tag_index, next_tag_idx, tag_group, delta);
-        update_rel_tag(&row.series, &row.tags, tag_index, next_tag_idx, tag_series, delta);
-        update_rel_tag(&row.characters, &row.tags, tag_index, next_tag_idx, tag_character, delta);
-        update_rel_tag(&row.uploader, &row.tags, tag_index, next_tag_idx, tag_uploader, delta);
+fn process_rel_tag_file<F>(
+    path: &Path,
+    removed: &[ArticleIndexRow],
+    added: &[ArticleIndexRow],
+    tag_index: &mut HashMap<String, usize>,
+    next_tag_idx: &mut usize,
+    extract: F,
+) -> Result<(), String>
+where
+    F: Fn(&ArticleIndexRow) -> &Option<String>,
+{
+    let mut rel_map: NestedCountMap = load_json_or_missing(path)?;
+    for r in removed {
+        if r.tags.as_deref().is_some_and(|s| !s.is_empty()) {
+            update_rel_tag(extract(r), &r.tags, tag_index, next_tag_idx, &mut rel_map, -1);
+        }
     }
+    for r in added {
+        if r.tags.as_deref().is_some_and(|s| !s.is_empty()) {
+            update_rel_tag(extract(r), &r.tags, tag_index, next_tag_idx, &mut rel_map, 1);
+        }
+    }
+    write_json_atomic(path, &rel_map)
+}
 
-    update_rel_pair(&row.series, &row.characters, character_series, delta);
-    update_rel_pair(&row.characters, &row.series, series_character, delta);
-    update_rel_pair(&row.series, &row.series, series_series, delta);
-    update_rel_pair(&row.characters, &row.characters, character_character, delta);
+fn process_rel_pair_file<F1, F2>(
+    path: &Path,
+    removed: &[ArticleIndexRow],
+    added: &[ArticleIndexRow],
+    extract_src: F1,
+    extract_tgt: F2,
+) -> Result<(), String>
+where
+    F1: Fn(&ArticleIndexRow) -> &Option<String>,
+    F2: Fn(&ArticleIndexRow) -> &Option<String>,
+{
+    let mut rel_map: NestedCountMap = load_json_or_missing(path)?;
+    for r in removed {
+        update_rel_pair(extract_src(r), extract_tgt(r), &mut rel_map, -1);
+    }
+    for r in added {
+        update_rel_pair(extract_src(r), extract_tgt(r), &mut rel_map, 1);
+    }
+    write_json_atomic(path, &rel_map)
 }
 
 pub(crate) fn apply_index_delta_sync(
@@ -261,83 +283,119 @@ pub(crate) fn apply_index_delta_sync(
         });
     }
 
+    // 1. index.json 단독 로드 -> 병합 -> 원자적 저장 -> 해제
     let p_index = base.join("index.json");
+    let total_unique_tags = {
+        let mut main_idx: MainIndexJson = load_json_or_missing(&p_index)?;
+        for r in &removed {
+            apply_row_to_main_index(r, -1, &mut main_idx);
+        }
+        for r in &added {
+            apply_row_to_main_index(r, 1, &mut main_idx);
+        }
+        for std_lang in [
+            "korean", "japanese", "english", "chinese", "spanish", "french", "german", "russian",
+        ] {
+            main_idx.lang.entry(std_lang.to_string()).or_insert(0);
+        }
+        let unique = main_idx.tag.len() as u32;
+        write_json_atomic(&p_index, &main_idx)?;
+        unique
+    };
+
+    // 2. tag-index.json + 5종 태그 관계 맵을 1개씩 순차 로드 -> 병합 -> 저장 -> 해제
     let p_tag_index = base.join("tag-index.json");
-    let p_tag_artist = base.join("tag-artist.json");
-    let p_tag_group = base.join("tag-group.json");
-    let p_tag_uploader = base.join("tag-uploader.json");
-    let p_tag_series = base.join("tag-series.json");
-    let p_tag_character = base.join("tag-character.json");
-    let p_char_series = base.join("character-series.json");
-    let p_series_char = base.join("series-character.json");
-    let p_char_char = base.join("character-character.json");
-    let p_series_series = base.join("series-series.json");
-
-    let mut main_idx: MainIndexJson = load_json_or_default(&p_index);
-    let mut tag_index: HashMap<String, usize> = load_json_or_default(&p_tag_index);
+    let mut tag_index: HashMap<String, usize> = load_json_or_missing(&p_tag_index)?;
     let mut next_tag_idx = tag_index.values().copied().max().map_or(0, |m| m + 1);
-    let mut tag_artist: NestedCountMap = load_json_or_default(&p_tag_artist);
-    let mut tag_group: NestedCountMap = load_json_or_default(&p_tag_group);
-    let mut tag_uploader: NestedCountMap = load_json_or_default(&p_tag_uploader);
-    let mut tag_series: NestedCountMap = load_json_or_default(&p_tag_series);
-    let mut tag_character: NestedCountMap = load_json_or_default(&p_tag_character);
-    let mut char_series: NestedCountMap = load_json_or_default(&p_char_series);
-    let mut series_char: NestedCountMap = load_json_or_default(&p_series_char);
-    let mut char_char: NestedCountMap = load_json_or_default(&p_char_char);
-    let mut series_series: NestedCountMap = load_json_or_default(&p_series_series);
 
-    for r in &removed {
-        apply_row_to_maps(
-            r, -1, &mut main_idx, &mut tag_index, &mut next_tag_idx, &mut tag_artist,
-            &mut tag_group, &mut tag_uploader, &mut tag_series, &mut tag_character,
-            &mut char_series, &mut series_char, &mut series_series, &mut char_char,
-        );
-    }
-    for r in &added {
-        apply_row_to_maps(
-            r, 1, &mut main_idx, &mut tag_index, &mut next_tag_idx, &mut tag_artist,
-            &mut tag_group, &mut tag_uploader, &mut tag_series, &mut tag_character,
-            &mut char_series, &mut series_char, &mut series_series, &mut char_char,
-        );
-    }
-
-    for std_lang in [
-        "korean", "japanese", "english", "chinese", "spanish", "french", "german", "russian",
-    ] {
-        main_idx.lang.entry(std_lang.to_string()).or_insert(0);
-    }
-
-    write_json_atomic(&p_index, &main_idx)?;
+    process_rel_tag_file(
+        &base.join("tag-artist.json"),
+        &removed,
+        &added,
+        &mut tag_index,
+        &mut next_tag_idx,
+        |r| &r.artists,
+    )?;
+    process_rel_tag_file(
+        &base.join("tag-group.json"),
+        &removed,
+        &added,
+        &mut tag_index,
+        &mut next_tag_idx,
+        |r| &r.groups,
+    )?;
+    process_rel_tag_file(
+        &base.join("tag-uploader.json"),
+        &removed,
+        &added,
+        &mut tag_index,
+        &mut next_tag_idx,
+        |r| &r.uploader,
+    )?;
+    process_rel_tag_file(
+        &base.join("tag-series.json"),
+        &removed,
+        &added,
+        &mut tag_index,
+        &mut next_tag_idx,
+        |r| &r.series,
+    )?;
+    process_rel_tag_file(
+        &base.join("tag-character.json"),
+        &removed,
+        &added,
+        &mut tag_index,
+        &mut next_tag_idx,
+        |r| &r.characters,
+    )?;
     write_json_atomic(&p_tag_index, &tag_index)?;
-    write_json_atomic(&p_tag_artist, &tag_artist)?;
-    write_json_atomic(&p_tag_group, &tag_group)?;
-    write_json_atomic(&p_tag_uploader, &tag_uploader)?;
-    write_json_atomic(&p_tag_series, &tag_series)?;
-    write_json_atomic(&p_tag_character, &tag_character)?;
-    write_json_atomic(&p_char_series, &char_series)?;
-    write_json_atomic(&p_series_char, &series_char)?;
-    write_json_atomic(&p_char_char, &char_char)?;
-    write_json_atomic(&p_series_series, &series_series)?;
+    drop(tag_index);
+
+    // 3. 4종 상호 관계 맵을 1개씩 순차 로드 -> 병합 -> 저장 -> 해제
+    process_rel_pair_file(
+        &base.join("character-series.json"),
+        &removed,
+        &added,
+        |r| &r.series,
+        |r| &r.characters,
+    )?;
+    process_rel_pair_file(
+        &base.join("series-character.json"),
+        &removed,
+        &added,
+        |r| &r.characters,
+        |r| &r.series,
+    )?;
+    process_rel_pair_file(
+        &base.join("character-character.json"),
+        &removed,
+        &added,
+        |r| &r.characters,
+        |r| &r.characters,
+    )?;
+    process_rel_pair_file(
+        &base.join("series-series.json"),
+        &removed,
+        &added,
+        |r| &r.series,
+        |r| &r.series,
+    )?;
 
     Ok(IndexSyncStats {
         added_or_updated: added.len() as u32,
         removed: removed.len() as u32,
-        total_unique_tags: main_idx.tag.len() as u32,
+        total_unique_tags,
         elapsed_ms: started.elapsed().as_millis() as u64,
     })
 }
 
-/// FRB 비동기 엔트리포인트: 변경 전/후 레코드 JSON을 받아 로컬 11종 태그 인덱스를 증분 갱신합니다.
-pub async fn apply_index_delta(
+/// FRB 엔트리포인트: 변경 전/후 레코드 JSON을 받아 로컬 11종 태그 인덱스를 증분 갱신합니다.
+pub fn apply_index_delta(
     data_dir: String,
     removed_rows_json: String,
     added_rows_json: String,
 ) -> Result<IndexSyncStats, String> {
-    std::thread::spawn(move || {
-        apply_index_delta_sync(&data_dir, &removed_rows_json, &added_rows_json)
-    })
-    .join()
-    .map_err(|_| "index_sync worker thread panicked".to_string())?
+    apply_index_delta_sync(&data_dir, &removed_rows_json, &added_rows_json)
 }
 
 #[cfg(test)]
@@ -358,7 +416,7 @@ mod tests {
         let s1 = apply_index_delta_sync(&dir_str, "[]", add1).unwrap();
         assert_eq!(s1.added_or_updated, 2);
 
-        let idx: MainIndexJson = load_json_or_default(&dir.join("index.json"));
+        let idx: MainIndexJson = load_json_or_missing(&dir.join("index.json")).unwrap();
         assert_eq!(idx.tag.get("female:elf"), Some(&2));
         assert_eq!(idx.tag.get("full color"), Some(&1));
         assert_eq!(idx.artist.get("nishi"), Some(&2));
@@ -372,11 +430,28 @@ mod tests {
         ]"#;
         apply_index_delta_sync(&dir_str, rem2, add2).unwrap();
 
-        let idx2: MainIndexJson = load_json_or_default(&dir.join("index.json"));
+        let idx2: MainIndexJson = load_json_or_missing(&dir.join("index.json")).unwrap();
         assert_eq!(idx2.tag.get("female:elf"), Some(&1));
         assert_eq!(idx2.tag.get("full color"), None);
         assert_eq!(idx2.tag.get("male:sole male"), Some(&1));
         assert_eq!(idx2.artist.get("nishi"), Some(&1));
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn corrupted_json_index_returns_err_and_preserves_existing_file() {
+        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("violet-idx-corrupt-{nanos}"));
+        fs::create_dir_all(&dir).unwrap();
+        let corrupt = "{not-valid-json";
+        let index_path = dir.join("index.json");
+        fs::write(&index_path, corrupt).unwrap();
+
+        let add = r#"[{"Id":1,"Tags":"|female:elf|","Language":"korean"}]"#;
+        let err = apply_index_delta_sync(&dir.to_string_lossy(), "[]", add).unwrap_err();
+        assert!(err.contains("corrupted json"));
+        assert_eq!(fs::read_to_string(&index_path).unwrap(), corrupt);
 
         let _ = fs::remove_dir_all(dir);
     }

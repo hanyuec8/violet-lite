@@ -109,7 +109,7 @@ class MangaTranslationPrefetcher {
     int pageIndex,
     Uint8List bytes,
   ) async {
-    final prep = MangaTranslationPipeline.instance.preprocessGrayscale(
+    final prep = await MangaTranslationPipeline.instance.preprocessGrayscale(
       bytes,
       maxLongEdge: profile.maxLongEdge,
     );

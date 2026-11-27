@@ -48,12 +48,38 @@ fn read_u64(file: &mut File) -> io::Result<u64> {
     Ok(u64::from_le_bytes(buf))
 }
 
-fn read_u32_le(buf: &[u8], off: usize) -> u32 {
-    u32::from_le_bytes(buf[off..off + 4].try_into().unwrap())
+const MAX_V2_DECOMPRESSED_BLOCK_BYTES: usize = 128 * 1024 * 1024;
+
+fn read_u16_le(buf: &[u8], off: usize) -> io::Result<u16> {
+    let end = off
+        .checked_add(2)
+        .ok_or_else(|| invalid_data("FSCM V2 u16 offset overflow"))?;
+    let slice = buf
+        .get(off..end)
+        .ok_or_else(|| invalid_data("FSCM V2 truncated u16"))?;
+    Ok(u16::from_le_bytes([slice[0], slice[1]]))
 }
 
-fn read_u64_le(buf: &[u8], off: usize) -> u64 {
-    u64::from_le_bytes(buf[off..off + 8].try_into().unwrap())
+fn read_u32_le(buf: &[u8], off: usize) -> io::Result<u32> {
+    let end = off
+        .checked_add(4)
+        .ok_or_else(|| invalid_data("FSCM V2 u32 offset overflow"))?;
+    let slice = buf
+        .get(off..end)
+        .ok_or_else(|| invalid_data("FSCM V2 truncated u32"))?;
+    Ok(u32::from_le_bytes([slice[0], slice[1], slice[2], slice[3]]))
+}
+
+fn read_u64_le(buf: &[u8], off: usize) -> io::Result<u64> {
+    let end = off
+        .checked_add(8)
+        .ok_or_else(|| invalid_data("FSCM V2 u64 offset overflow"))?;
+    let slice = buf
+        .get(off..end)
+        .ok_or_else(|| invalid_data("FSCM V2 truncated u64"))?;
+    Ok(u64::from_le_bytes([
+        slice[0], slice[1], slice[2], slice[3], slice[4], slice[5], slice[6], slice[7],
+    ]))
 }
 
 impl SourceV2 {
@@ -90,7 +116,11 @@ impl SourceV2 {
         file.read_exact(&mut stored)?;
 
         let raw = if (self.flags & V2_FLAG_LZ4_HOT) != 0 {
-            lz4_flex::decompress(&stored, blk.hot_raw_len as usize)
+            let raw_len = blk.hot_raw_len as usize;
+            if raw_len > MAX_V2_DECOMPRESSED_BLOCK_BYTES {
+                return Err(invalid_data("FSCM V2 hot block exceeds max size"));
+            }
+            lz4_flex::decompress(&stored, raw_len)
                 .map_err(|_| invalid_data("FSCM V2 hot LZ4 decompression failed"))?
         } else {
             stored
@@ -99,13 +129,25 @@ impl SourceV2 {
             return Err(invalid_data("FSCM V2 hot block truncated"));
         }
         let n = blk.record_count as usize;
-        let run_count = read_u32_le(&raw, 0) as usize;
-        let runs_end = 4usize
-            .checked_add(run_count.checked_mul(8).ok_or_else(|| invalid_data("run overflow"))?)
+        let run_count = read_u32_le(&raw, 0)? as usize;
+        let run_bytes = run_count
+            .checked_mul(8)
             .ok_or_else(|| invalid_data("run overflow"))?;
-        let pages_end = runs_end + n * 2;
-        let corrects_end = pages_end + n;
-        let lens_end = corrects_end + n * 2;
+        let runs_end = 4usize
+            .checked_add(run_bytes)
+            .ok_or_else(|| invalid_data("run overflow"))?;
+        let pages_bytes = n
+            .checked_mul(2)
+            .ok_or_else(|| invalid_data("pages overflow"))?;
+        let pages_end = runs_end
+            .checked_add(pages_bytes)
+            .ok_or_else(|| invalid_data("pages overflow"))?;
+        let corrects_end = pages_end
+            .checked_add(n)
+            .ok_or_else(|| invalid_data("corrects overflow"))?;
+        let lens_end = corrects_end
+            .checked_add(pages_bytes)
+            .ok_or_else(|| invalid_data("lens overflow"))?;
         if raw.len() < lens_end {
             return Err(invalid_data("FSCM V2 hot metadata truncated"));
         }
@@ -117,17 +159,22 @@ impl SourceV2 {
         let mut text_cursor = 0u64;
         let mut rec_i = 0usize;
         for r in 0..run_count {
-            let aid = read_u32_le(&raw, 4 + r * 8);
-            let cnt = read_u32_le(&raw, 4 + r * 8 + 4) as usize;
+            let run_off = 4 + r * 8;
+            let aid = read_u32_le(&raw, run_off)?;
+            let cnt = read_u32_le(&raw, run_off + 4)? as usize;
+            let end_rec = rec_i
+                .checked_add(cnt)
+                .ok_or_else(|| invalid_data("FSCM V2 run count overflow"))?;
+            if end_rec > n {
+                return Err(invalid_data("FSCM V2 run count mismatch"));
+            }
             for _ in 0..cnt {
-                if rec_i >= n {
-                    return Err(invalid_data("FSCM V2 run count mismatch"));
-                }
-                let p_off = runs_end + rec_i * 2;
-                let page = u32::from(u16::from_le_bytes([raw[p_off], raw[p_off + 1]]));
-                let correct = dequantize_correct_f32(raw[pages_end + rec_i]);
-                let l_off = corrects_end + rec_i * 2;
-                let len = u16::from_le_bytes([raw[l_off], raw[l_off + 1]]);
+                let page = u32::from(read_u16_le(&raw, runs_end + rec_i * 2)?);
+                let correct_byte = *raw
+                    .get(pages_end + rec_i)
+                    .ok_or_else(|| invalid_data("FSCM V2 correct out of bounds"))?;
+                let correct = dequantize_correct_f32(correct_byte);
+                let len = read_u16_le(&raw, corrects_end + rec_i * 2)?;
                 out.messages.push(MessageMeta {
                     article_id: aid,
                     page,
@@ -138,15 +185,19 @@ impl SourceV2 {
                     correct,
                     rects: [0.0; 4],
                 });
-                text_cursor += u64::from(len);
+                text_cursor = text_cursor
+                    .checked_add(u64::from(len))
+                    .ok_or_else(|| invalid_data("FSCM V2 text cursor overflow"))?;
                 rec_i += 1;
             }
         }
         if rec_i != n {
             return Err(invalid_data("FSCM V2 record count mismatch"));
         }
-        let arena_slice = &raw[lens_end..];
-        if arena_slice.len() != text_cursor as usize {
+        let arena_slice = raw
+            .get(lens_end..)
+            .ok_or_else(|| invalid_data("FSCM V2 arena out of bounds"))?;
+        if u64::try_from(arena_slice.len()).ok() != Some(text_cursor) {
             return Err(invalid_data("FSCM V2 text length mismatch"));
         }
         if std::str::from_utf8(arena_slice).is_err() {
@@ -160,26 +211,43 @@ impl SourceV2 {
         file.seek(SeekFrom::Start(blk.cold_offset))?;
         let mut stored = vec![0u8; blk.cold_len as usize];
         file.read_exact(&mut stored)?;
+        let expected = (blk.record_count as usize)
+            .checked_mul(8)
+            .ok_or_else(|| invalid_data("FSCM V2 cold size overflow"))?;
         let raw = if (self.flags & V2_FLAG_LZ4_COLD) != 0 {
-            lz4_flex::decompress(&stored, blk.cold_raw_len as usize)
+            let raw_len = blk.cold_raw_len as usize;
+            if raw_len > MAX_V2_DECOMPRESSED_BLOCK_BYTES {
+                return Err(invalid_data("FSCM V2 cold block exceeds max size"));
+            }
+            lz4_flex::decompress(&stored, raw_len)
                 .map_err(|_| invalid_data("FSCM V2 cold LZ4 decompression failed"))?
         } else {
             stored
         };
-        let expected = (blk.record_count as usize) * 8;
         if raw.len() != expected {
             return Err(invalid_data("FSCM V2 cold length mismatch"));
         }
         Ok(raw)
     }
 
-    pub fn cold_rect_at(cold_raw: &[u8], record_count: usize, local_idx: usize) -> [f32; 4] {
-        let mut xywh = [0u16; 4];
-        for col in 0..4 {
-            let off = (col * record_count + local_idx) * 2;
-            xywh[col] = u16::from_le_bytes([cold_raw[off], cold_raw[off + 1]]);
+    pub fn cold_rect_at(
+        cold_raw: &[u8],
+        record_count: usize,
+        local_idx: usize,
+    ) -> io::Result<[f32; 4]> {
+        if local_idx >= record_count {
+            return Err(invalid_data("FSCM V2 cold local index out of bounds"));
         }
-        dequantize_rects_xywh(xywh)
+        let mut xywh = [0u16; 4];
+        for (col, slot) in xywh.iter_mut().enumerate() {
+            let elem = col
+                .checked_mul(record_count)
+                .and_then(|base| base.checked_add(local_idx))
+                .and_then(|idx| idx.checked_mul(2))
+                .ok_or_else(|| invalid_data("FSCM V2 cold offset overflow"))?;
+            *slot = read_u16_le(cold_raw, elem)?;
+        }
+        Ok(dequantize_rects_xywh(xywh))
     }
 }
 
@@ -234,8 +302,20 @@ impl Source {
             let count = usize::try_from(count_u64).map_err(|_| invalid_data("too many records"))?;
 
             let dir_end = V2_HEADER_LEN
-                + (article_count as u64) * (V2_ARTICLE_ENTRY_LEN as u64)
-                + (block_count as u64) * (V2_BLOCK_ENTRY_LEN as u64);
+                .checked_add(
+                    (article_count as u64)
+                        .checked_mul(V2_ARTICLE_ENTRY_LEN as u64)
+                        .ok_or_else(|| invalid_data("FSCM V2 article table overflow"))?,
+                )
+                .and_then(|v| {
+                    v.checked_add(
+                        (block_count as u64)
+                            .checked_mul(V2_BLOCK_ENTRY_LEN as u64)
+                            .ok_or_else(|| invalid_data("FSCM V2 block table overflow"))
+                            .ok()?,
+                    )
+                })
+                .ok_or_else(|| invalid_data("FSCM V2 directory overflow"))?;
             if dir_end > file_len {
                 return Err(invalid_data("FSCM V2 directory exceeds file length"));
             }
@@ -246,9 +326,9 @@ impl Source {
             for i in 0..article_count {
                 let o = i * V2_ARTICLE_ENTRY_LEN;
                 articles.push(ArticleEntryV2 {
-                    article_id: read_u32_le(&art_buf, o),
-                    start_record: read_u32_le(&art_buf, o + 4),
-                    record_count: read_u32_le(&art_buf, o + 8),
+                    article_id: read_u32_le(&art_buf, o)?,
+                    start_record: read_u32_le(&art_buf, o + 4)?,
+                    record_count: read_u32_le(&art_buf, o + 8)?,
                 });
             }
 
@@ -259,16 +339,16 @@ impl Source {
             for i in 0..block_count {
                 let o = i * V2_BLOCK_ENTRY_LEN;
                 let b = BlockEntryV2 {
-                    first_article_id: read_u32_le(&blk_buf, o),
-                    last_article_id: read_u32_le(&blk_buf, o + 4),
-                    first_record: read_u32_le(&blk_buf, o + 8),
-                    record_count: read_u32_le(&blk_buf, o + 12),
-                    hot_offset: read_u64_le(&blk_buf, o + 16),
-                    hot_len: read_u32_le(&blk_buf, o + 24),
-                    hot_raw_len: read_u32_le(&blk_buf, o + 28),
-                    cold_offset: read_u64_le(&blk_buf, o + 32),
-                    cold_len: read_u32_le(&blk_buf, o + 40),
-                    cold_raw_len: read_u32_le(&blk_buf, o + 44),
+                    first_article_id: read_u32_le(&blk_buf, o)?,
+                    last_article_id: read_u32_le(&blk_buf, o + 4)?,
+                    first_record: read_u32_le(&blk_buf, o + 8)?,
+                    record_count: read_u32_le(&blk_buf, o + 12)?,
+                    hot_offset: read_u64_le(&blk_buf, o + 16)?,
+                    hot_len: read_u32_le(&blk_buf, o + 24)?,
+                    hot_raw_len: read_u32_le(&blk_buf, o + 28)?,
+                    cold_offset: read_u64_le(&blk_buf, o + 32)?,
+                    cold_len: read_u32_le(&blk_buf, o + 40)?,
+                    cold_raw_len: read_u32_le(&blk_buf, o + 44)?,
                 };
                 if b.hot_offset.saturating_add(u64::from(b.hot_len)) > file_len
                     || b.cold_offset.saturating_add(u64::from(b.cold_len)) > file_len
@@ -397,7 +477,9 @@ impl MobileStore {
                         cached_cold = v2.read_cold_block(file, blk)?;
                         cached_v2_key = Some((source_index, blk_idx));
                     }
-                    let msg = cached_hot.get(local_idx);
+                    let msg = cached_hot
+                        .try_get(local_idx)
+                        .ok_or_else(|| invalid_data("FSCM V2 hot record invalid"))?;
                     let allowance = msg
                         .message
                         .len()
@@ -411,7 +493,7 @@ impl MobileStore {
                     }
                     let raw_text = response_text(None, msg.message);
                     raw_total += raw_text.len();
-                    let rects = SourceV2::cold_rect_at(&cached_cold, blk.record_count as usize, local_idx);
+                    let rects = SourceV2::cold_rect_at(&cached_cold, blk.record_count as usize, local_idx)?;
                     results.push(MaterializedHit {
                         article_id: msg.article_id,
                         page: msg.page,
@@ -424,5 +506,59 @@ impl MobileStore {
             }
         }
         Ok(results)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn v2_corrupt_hot_block_and_cold_rect_fail_without_panicking() {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("violet-corrupt-v2-{nanos}.fscm"));
+
+        // 1 block claiming record_count = u32::MAX with 8-byte hot payload -> must return Err, not panic
+        let mut f = File::create(&path).unwrap();
+        f.write_all(FLAT_V2_MAGIC).unwrap();
+        f.write_all(&FLAT_V2_VERSION.to_le_bytes()).unwrap();
+        f.write_all(&0u32.to_le_bytes()).unwrap();
+        f.write_all(&1u64.to_le_bytes()).unwrap(); // total_records
+        f.write_all(&1u32.to_le_bytes()).unwrap(); // block_count
+        f.write_all(&0u32.to_le_bytes()).unwrap(); // article_count
+
+        let hot_offset = V2_HEADER_LEN + V2_BLOCK_ENTRY_LEN as u64;
+        let hot_payload = [0u8; 8];
+        let cold_offset = hot_offset + hot_payload.len() as u64;
+        // BlockEntryV2 (48 bytes)
+        f.write_all(&1u32.to_le_bytes()).unwrap();
+        f.write_all(&1u32.to_le_bytes()).unwrap();
+        f.write_all(&0u32.to_le_bytes()).unwrap();
+        f.write_all(&u32::MAX.to_le_bytes()).unwrap(); // corrupted record_count
+        f.write_all(&hot_offset.to_le_bytes()).unwrap();
+        f.write_all(&(hot_payload.len() as u32).to_le_bytes()).unwrap();
+        f.write_all(&(hot_payload.len() as u32).to_le_bytes()).unwrap();
+        f.write_all(&cold_offset.to_le_bytes()).unwrap();
+        f.write_all(&0u32.to_le_bytes()).unwrap();
+        f.write_all(&0u32.to_le_bytes()).unwrap();
+        f.write_all(&hot_payload).unwrap();
+        drop(f);
+
+        let src = Source::open(&path).unwrap();
+        let SourceFormat::V2(v2) = &src.format else {
+            panic!("expected V2");
+        };
+        let mut reader = File::open(&path).unwrap();
+        let mut blk_out = MessageBlock::default();
+        let err = v2.read_hot_block(&mut reader, &v2.blocks[0], &mut blk_out).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+        assert!(SourceV2::cold_rect_at(&[0u8; 4], 4, 2).is_err());
+
+        let _ = std::fs::remove_file(path);
     }
 }

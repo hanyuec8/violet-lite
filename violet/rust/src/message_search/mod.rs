@@ -83,17 +83,34 @@ pub struct StoredMessage<'a> {
 }
 
 impl MessageBlock {
+    /// Returns a safely-validated slice view for `index`, returning `None` if the
+    /// index, byte range, or UTF-8 sequence is invalid.
     #[inline]
-    pub fn get(&self, index: usize) -> StoredMessage<'_> {
-        let meta = &self.messages[index];
-        let start = meta.message.offset as usize;
-        let end = start + meta.message.len as usize;
-        // Safety: `validate_block_text` validates UTF-8 boundaries before scoring.
-        let message = unsafe { std::str::from_utf8_unchecked(&self.message_bytes[start..end]) };
-        StoredMessage {
+    pub fn try_get(&self, index: usize) -> Option<StoredMessage<'_>> {
+        let meta = self.messages.get(index)?;
+        let start = usize::try_from(meta.message.offset).ok()?;
+        let end = start.checked_add(meta.message.len as usize)?;
+        let slice = self.message_bytes.get(start..end)?;
+        let message = std::str::from_utf8(slice).ok()?;
+        Some(StoredMessage {
             article_id: meta.article_id,
             page: meta.page,
             message,
+            correct: meta.correct,
+            rects: meta.rects,
+        })
+    }
+
+    #[inline]
+    pub fn get(&self, index: usize) -> StoredMessage<'_> {
+        if let Some(msg) = self.try_get(index) {
+            return msg;
+        }
+        let meta = &self.messages[index];
+        StoredMessage {
+            article_id: meta.article_id,
+            page: meta.page,
+            message: "",
             correct: meta.correct,
             rects: meta.rects,
         }
@@ -292,6 +309,11 @@ impl TopScoredMessages {
     #[inline]
     pub fn len(&self) -> usize {
         self.heap.len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.heap.is_empty()
     }
 
     #[inline]
@@ -809,5 +831,38 @@ impl FlatMessageWriterV2 {
             writer.write_all(cold_bytes)?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn message_block_get_handles_corrupt_utf8_and_oob_safely() {
+        let block = MessageBlock {
+            messages: vec![
+                MessageMeta {
+                    article_id: 1,
+                    page: 0,
+                    message: TextRange { offset: 0, len: 2 },
+                    correct: 1.0,
+                    rects: [0.0; 4],
+                },
+                MessageMeta {
+                    article_id: 2,
+                    page: 1,
+                    message: TextRange { offset: 1, len: 99 },
+                    correct: 0.5,
+                    rects: [0.0; 4],
+                },
+            ],
+            message_bytes: vec![0xFF, 0xFE],
+        };
+
+        assert!(block.try_get(0).is_none());
+        assert!(block.try_get(1).is_none());
+        assert_eq!(block.get(0).message, "");
+        assert_eq!(block.get(1).message, "");
     }
 }

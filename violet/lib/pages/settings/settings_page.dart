@@ -3,7 +3,6 @@
 
 // ignore_for_file: use_build_context_synchronously
 
-import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 import 'package:dynamic_theme/dynamic_theme.dart';
@@ -451,11 +450,7 @@ class _SettingsPageState extends ThemeSwitchableState<SettingsPage>
                   ),
                 )
                 .then((value) async {
-                  HentaiIndex.init();
-                  final directory = await getApplicationDocumentsDirectory();
-                  final path = File('${directory.path}/data/index.json');
-                  final text = path.readAsStringSync();
-                  HentaiIndex.tagCount = jsonDecode(text);
+                  await HentaiIndex.reloadFromDisk();
                   await DataBaseManager.reloadInstance();
 
                   showToast(

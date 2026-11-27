@@ -64,12 +64,16 @@ void main() {
       expect(ImagePerceptualHash.calculateSimilarity(h1, h3), equals(0.0));
     });
 
-    test('computeDhash returns null for invalid/empty bytes safely', () {
-      final emptyRes = rust_image_hash.computeDhash(bytes: []);
-      expect(emptyRes, isNull);
+    test('computeDhash throws descriptive error for invalid/empty bytes safely', () async {
+      await expectLater(
+        () => rust_image_hash.computeDhash(bytes: []),
+        throwsA(anything),
+      );
 
-      final invalidRes = rust_image_hash.computeDhash(bytes: [1, 2, 3, 4]);
-      expect(invalidRes, isNull);
+      await expectLater(
+        () => rust_image_hash.computeDhash(bytes: [1, 2, 3, 4]),
+        throwsA(anything),
+      );
     });
   });
 }

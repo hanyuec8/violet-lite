@@ -23,21 +23,38 @@ static STORE: LazyLock<RwLock<Option<Arc<MobileStore>>>> = LazyLock::new(|| RwLo
 static POPULAR_RANKS: LazyLock<RwLock<AHashMap<u32, u32>>> =
     LazyLock::new(|| RwLock::new(AHashMap::new()));
 
+#[inline]
+fn read_lock<T>(lock: &RwLock<T>) -> RwLockReadGuard<'_, T> {
+    lock.read().unwrap_or_else(|e| e.into_inner())
+}
+
+#[inline]
+fn write_lock<T>(lock: &RwLock<T>) -> std::sync::RwLockWriteGuard<'_, T> {
+    lock.write().unwrap_or_else(|e| e.into_inner())
+}
+
+#[inline]
+fn mutex_lock<T>(lock: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    lock.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 pub fn set_popular_order(ids: &[u32]) -> usize {
     let mut map = AHashMap::with_capacity(ids.len());
     for (rank, &id) in ids.iter().enumerate() {
         map.entry(id).or_insert(rank as u32);
     }
     let count = map.len();
-    *POPULAR_RANKS.write().unwrap() = map;
-    if let Some(store) = STORE.read().unwrap().as_ref() {
-        *store.last_cache.lock().unwrap() = None;
+    *write_lock(&POPULAR_RANKS) = map;
+    // Clone Arc and drop STORE lock before acquiring last_cache to avoid nested lock inversion.
+    let store_opt = read_lock(&STORE).clone();
+    if let Some(store) = store_opt {
+        *mutex_lock(&store.last_cache) = None;
     }
     count
 }
 
 pub(crate) fn popular_rank_lookup() -> RwLockReadGuard<'static, AHashMap<u32, u32>> {
-    POPULAR_RANKS.read().unwrap()
+    read_lock(&POPULAR_RANKS)
 }
 
 pub struct SearchOutcome {
@@ -264,7 +281,7 @@ impl MobileStore {
 
         // 동일 쿼리·조건·포함모드에서 정렬 순서만 변경 시 디스크 재스캔 없이 즉시 반환
         {
-            let mut cache_guard = self.last_cache.lock().unwrap();
+            let mut cache_guard = mutex_lock(&self.last_cache);
             if let Some(snap) = cache_guard.as_mut() {
                 if snap.scope == scope
                     && snap.query_norm == normalized
@@ -339,7 +356,7 @@ impl MobileStore {
             SortMode::Latest => snap.lat_mat = Some(hits.clone()),
             SortMode::Popular => snap.pop_mat = Some(hits.clone()),
         }
-        *self.last_cache.lock().unwrap() = Some(snap);
+        *mutex_lock(&self.last_cache) = Some(snap);
 
         Ok(SearchOutcome {
             total_matched: ranked.total_matched,
@@ -415,13 +432,13 @@ pub fn initialize_global(
 ) -> io::Result<usize> {
     let store = Arc::new(MobileStore::open(paths, budget_mb, search_threads)?);
     let total = store.total;
-    let mut guard = STORE.write().unwrap();
+    let mut guard = write_lock(&STORE);
     *guard = Some(store);
     Ok(total)
 }
 
 pub fn unload_global() -> bool {
-    let mut guard = STORE.write().unwrap();
+    let mut guard = write_lock(&STORE);
     let had_store = guard.is_some();
     if let Some(store) = guard.as_ref() {
         store.cancelled.store(true, AtomicOrdering::SeqCst);
@@ -431,7 +448,7 @@ pub fn unload_global() -> bool {
 }
 
 pub fn progress_global() -> ProgressSnapshot {
-    let guard = STORE.read().unwrap();
+    let guard = read_lock(&STORE);
     match guard.as_ref() {
         Some(store) => ProgressSnapshot {
             initialized: true,
@@ -457,7 +474,7 @@ pub fn progress_global() -> ProgressSnapshot {
 }
 
 pub fn cancel_global() -> bool {
-    let guard = STORE.read().unwrap();
+    let guard = read_lock(&STORE);
     if let Some(store) = guard.as_ref() {
         if store.active.load(AtomicOrdering::SeqCst) {
             store.cancelled.store(true, AtomicOrdering::SeqCst);
@@ -484,7 +501,7 @@ pub fn search_global_with_sort(
     sort_mode: SortMode,
 ) -> io::Result<SearchOutcome> {
     let store = {
-        let guard = STORE.read().unwrap();
+        let guard = read_lock(&STORE);
         guard.clone().ok_or_else(|| {
             io::Error::new(io::ErrorKind::NotConnected, "mobile store not initialized")
         })?
@@ -494,7 +511,7 @@ pub fn search_global_with_sort(
 
 pub fn article_global(id: u32, query: Option<&str>) -> io::Result<Vec<MaterializedHit>> {
     let store = {
-        let guard = STORE.read().unwrap();
+        let guard = read_lock(&STORE);
         guard.clone().ok_or_else(|| {
             io::Error::new(io::ErrorKind::NotConnected, "mobile store not initialized")
         })?
@@ -663,6 +680,27 @@ mod tests {
             assert_eq!(pop_res.total_matched, 3);
             assert_eq!(pop_res.hits[0].article_id, 5001);
         }
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn poisoned_last_cache_recovers_without_panicking() {
+        let dir = temp_dir("poison");
+        let p0 = dir.join("poison.fscm");
+        let mut w = FlatMessageWriter::default();
+        w.push(1, 0, &convert_query("안녕"), Some("안녕"), 0.9, [0.0; 4]);
+        w.write_to(&mut File::create(&p0).unwrap()).unwrap();
+
+        let store = Arc::new(MobileStore::open(&[p0], 128, 2).unwrap());
+        let cloned = Arc::clone(&store);
+        let _ = std::thread::spawn(move || {
+            let _guard = cloned.last_cache.lock().unwrap();
+            panic!("intentional poison");
+        })
+        .join();
+
+        let hits = store.search_store(Scope::All, "안녕", true, 5).unwrap();
+        assert_eq!(hits.len(), 1);
         let _ = fs::remove_dir_all(dir);
     }
 }

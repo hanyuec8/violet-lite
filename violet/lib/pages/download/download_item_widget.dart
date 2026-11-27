@@ -9,6 +9,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:violet/component/hentai.dart';
 import 'package:violet/database/user/download.dart';
 import 'package:violet/database/user/record.dart';
 import 'package:violet/other/dialogs.dart';
@@ -19,11 +20,18 @@ import 'package:violet/pages/viewer/viewer_page.dart';
 import 'package:violet/pages/viewer/viewer_page_provider.dart';
 import 'package:violet/settings/settings.dart';
 
+enum DownloadBatchAction { resume, stop }
+
 class DownloadItemWidget extends StatefulWidget {
   final DownloadItemModel item;
   final VoidCallback onChanged;
   final Future<void> Function(DownloadItemModel item) onDelete;
   final DownloadResultType viewType;
+  final bool selectionMode;
+  final bool isSelected;
+  final VoidCallback? onToggleSelect;
+  final VoidCallback? onEnterSelectionMode;
+  final Stream<(int, DownloadBatchAction)>? batchActionStream;
 
   const DownloadItemWidget({
     super.key,
@@ -31,6 +39,11 @@ class DownloadItemWidget extends StatefulWidget {
     required this.onChanged,
     required this.onDelete,
     required this.viewType,
+    this.selectionMode = false,
+    this.isSelected = false,
+    this.onToggleSelect,
+    this.onEnterSelectionMode,
+    this.batchActionStream,
   });
 
   @override
@@ -54,6 +67,11 @@ class _DownloadItemWidgetState extends State<DownloadItemWidget>
   double _downloadedBytes = 0;
   bool _isRunning = false;
   bool _stopRequested = false;
+  StreamSubscription<(int, DownloadBatchAction)>? _batchSub;
+  final Set<String> _failedLocalFiles = <String>{};
+  bool _thumbRefreshAttempted = false;
+  bool _refreshingThumb = false;
+  int _remoteRetryCount = 0;
 
   @override
   void initState() {
@@ -63,6 +81,7 @@ class _DownloadItemWidgetState extends State<DownloadItemWidget>
       _safeSetState,
       _safeSetState,
     );
+    _subscribeBatchActions();
 
     if (widget.item.state() == 1 && !widget.item.download) {
       unawaited(_startDownload(skipExisting: false));
@@ -70,6 +89,46 @@ class _DownloadItemWidgetState extends State<DownloadItemWidget>
       // 앱 강제 종료 등으로 중단된 작업을 중지 상태로 정리
       unawaited(_routine.setToStop());
     }
+  }
+
+  @override
+  void didUpdateWidget(covariant DownloadItemWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.item.id() != oldWidget.item.id()) {
+      _failedLocalFiles.clear();
+      _thumbRefreshAttempted = false;
+      _refreshingThumb = false;
+      _remoteRetryCount = 0;
+    }
+    if (widget.batchActionStream != oldWidget.batchActionStream) {
+      _batchSub?.cancel();
+      _subscribeBatchActions();
+    }
+  }
+
+  @override
+  void dispose() {
+    _batchSub?.cancel();
+    super.dispose();
+  }
+
+  void _subscribeBatchActions() {
+    _batchSub = widget.batchActionStream?.listen((event) {
+      final (itemId, action) = event;
+      if (!mounted || itemId != widget.item.id()) return;
+      switch (action) {
+        case DownloadBatchAction.resume:
+          if (!_isRunning && widget.item.state() != 0) {
+            unawaited(_startDownload(skipExisting: true));
+          }
+          break;
+        case DownloadBatchAction.stop:
+          if (_isRunning) {
+            unawaited(_stopDownload());
+          }
+          break;
+      }
+    });
   }
 
   void _safeSetState() {
@@ -224,7 +283,19 @@ class _DownloadItemWidgetState extends State<DownloadItemWidget>
     widget.onChanged();
   }
 
+  Future<void> _copyArticleId() async {
+    final articleId = widget.item.url().trim();
+    if (articleId.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: articleId));
+    showToast(
+      icon: Icons.copy,
+      level: ToastLevel.check,
+      message: '작품 번호 $articleId 복사되었습니다.',
+    );
+  }
+
   Future<void> _openOfflineViewer() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final files = widget.item
         .filesWithoutThumbnail()
         .where((p) => File(p).existsSync())
@@ -268,6 +339,7 @@ class _DownloadItemWidgetState extends State<DownloadItemWidget>
   }
 
   Future<void> _showItemMenu() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final state = widget.item.state();
     final diskBytes = await widget.item.calculateDiskSizeBytes();
     final sizeText = _formatBytes(diskBytes.toDouble());
@@ -295,7 +367,11 @@ class _DownloadItemWidgetState extends State<DownloadItemWidget>
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
-                subtitle: Text('ID: ${widget.item.url()} · 로컬 용량: $sizeText'),
+                subtitle: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onDoubleTap: _copyArticleId,
+                  child: Text('ID: ${widget.item.url()} · 로컬 용량: $sizeText'),
+                ),
               ),
               const Divider(height: 1),
               ListTile(
@@ -354,20 +430,94 @@ class _DownloadItemWidgetState extends State<DownloadItemWidget>
     );
   }
 
+  String? _normalizedRemoteThumbnailUrl() {
+    final raw = widget.item.thumbnail()?.trim();
+    if (raw == null || raw.isEmpty) return null;
+    if (raw.startsWith('//')) return 'https:$raw';
+    return raw.startsWith('http') ? raw : null;
+  }
+
+  void _markLocalFileFailed(String filePath) {
+    if (_failedLocalFiles.contains(filePath)) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _failedLocalFiles.add(filePath);
+      });
+    });
+  }
+
+  Future<void> _refreshRemoteThumbnail() async {
+    if (_thumbRefreshAttempted || _refreshingThumb) return;
+    _thumbRefreshAttempted = true;
+    final qr = widget.item.toQueryResult();
+    if (qr == null) return;
+
+    _refreshingThumb = true;
+    try {
+      final provider = await HentaiManager.getImageProvider(qr);
+      await provider.init();
+      final url = (await provider.getThumbnailUrl()).trim();
+      final header = await provider.getHeader(0);
+      if (url.isNotEmpty) {
+        final updated = Map<String, dynamic>.from(widget.item.result);
+        updated['Thumbnail'] = url.startsWith('//') ? 'https:$url' : url;
+        updated['ThumbnailHeader'] = jsonEncode(header);
+        widget.item.result = updated;
+        unawaited(widget.item.update());
+      }
+    } catch (_) {
+    } finally {
+      _refreshingThumb = false;
+      if (mounted) {
+        setState(() {
+          _remoteRetryCount++;
+        });
+      }
+    }
+  }
+
+  void _handleRemoteThumbError() {
+    if (!_thumbRefreshAttempted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          unawaited(_refreshRemoteThumbnail());
+        }
+      });
+      return;
+    }
+    if (_remoteRetryCount < 2) {
+      Future.delayed(const Duration(milliseconds: 350), () {
+        if (!mounted) return;
+        setState(() {
+          _remoteRetryCount++;
+        });
+      });
+    }
+  }
+
   Widget _buildThumbnail({double? width, double? height}) {
-    final localThumb = widget.item.tryThumbnailFile();
-    if (localThumb != null) {
+    final localCandidates = widget.item
+        .candidateThumbnailFiles()
+        .where((p) => !_failedLocalFiles.contains(p))
+        .toList();
+    if (localCandidates.isNotEmpty) {
+      final localThumb = localCandidates.first;
       return Image.file(
         File(localThumb),
+        key: ValueKey('thumb_file_$localThumb'),
         width: width,
         height: height,
         fit: BoxFit.cover,
-        errorBuilder: (_, _, _) => _fallbackThumb(width, height),
+        errorBuilder: (_, _, _) {
+          _markLocalFileFailed(localThumb);
+          return _fallbackThumb(width, height);
+        },
       );
     }
 
-    final remoteUrl = widget.item.thumbnail();
-    if (remoteUrl != null && remoteUrl.startsWith('http')) {
+    final remoteUrl = _normalizedRemoteThumbnailUrl();
+    if (remoteUrl != null) {
       Map<String, String>? headers;
       final rawHeader = widget.item.thumbnailHeader();
       if (rawHeader != null && rawHeader.isNotEmpty) {
@@ -376,16 +526,50 @@ class _DownloadItemWidgetState extends State<DownloadItemWidget>
         } catch (_) {}
       }
       return CachedNetworkImage(
+        key: ValueKey('thumb_net_${remoteUrl}_$_remoteRetryCount'),
         imageUrl: remoteUrl,
         httpHeaders: headers,
         width: width,
         height: height,
         fit: BoxFit.cover,
-        errorWidget: (_, _, _) => _fallbackThumb(width, height),
+        placeholder: (_, _) => _loadingThumb(width, height),
+        errorWidget: (_, _, _) {
+          _handleRemoteThumbError();
+          return _fallbackThumb(width, height);
+        },
       );
     }
 
+    if (!_thumbRefreshAttempted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          unawaited(_refreshRemoteThumbnail());
+        }
+      });
+      return _loadingThumb(width, height);
+    }
+
     return _fallbackThumb(width, height);
+  }
+
+  Widget _loadingThumb(double? width, double? height) {
+    return Container(
+      width: width,
+      height: height,
+      color: Settings.themeWhat.value
+          ? Colors.grey.shade800
+          : Colors.grey.shade300,
+      child: Center(
+        child: SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: Settings.majorColor.value.withAlpha(160),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _fallbackThumb(double? width, double? height) {
@@ -474,16 +658,65 @@ class _DownloadItemWidgetState extends State<DownloadItemWidget>
   Widget _buildGridCard() {
     final state = widget.item.state();
     final progress = _progressValue();
+    final selected = widget.selectionMode && widget.isSelected;
     return Card(
       clipBehavior: Clip.antiAlias,
       margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: selected
+            ? BorderSide(color: Settings.majorColor.value, width: 2.5)
+            : BorderSide.none,
+      ),
       child: InkWell(
-        onTap: state == 0 ? _openOfflineViewer : _showItemMenu,
-        onLongPress: _showItemMenu,
+        onTap: widget.selectionMode
+            ? widget.onToggleSelect
+            : (state == 0 ? _openOfflineViewer : _showItemMenu),
+        onLongPress: widget.selectionMode
+            ? widget.onToggleSelect
+            : (widget.onEnterSelectionMode ?? _showItemMenu),
         child: Stack(
           fit: StackFit.expand,
           children: [
             _buildThumbnail(),
+            if (selected)
+              Container(
+                color: Settings.majorColor.value.withAlpha(45),
+              ),
+            if (widget.selectionMode)
+              Positioned(
+                top: 6,
+                right: 6,
+                child: Container(
+                  decoration: const BoxDecoration(
+                    color: Colors.black54,
+                    shape: BoxShape.circle,
+                  ),
+                  padding: const EdgeInsets.all(2),
+                  child: Icon(
+                    selected
+                        ? Icons.check_circle
+                        : Icons.radio_button_unchecked,
+                    color: selected ? Settings.majorColor.value : Colors.white,
+                    size: 22,
+                  ),
+                ),
+              )
+            else
+              Positioned(
+                top: 2,
+                right: 2,
+                child: IconButton(
+                  icon: const Icon(Icons.more_vert, color: Colors.white),
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.black38,
+                    padding: const EdgeInsets.all(4),
+                    minimumSize: const Size(28, 28),
+                  ),
+                  tooltip: '관리 메뉴',
+                  onPressed: _showItemMenu,
+                ),
+              ),
             Positioned(
               left: 0,
               right: 0,
@@ -512,6 +745,21 @@ class _DownloadItemWidgetState extends State<DownloadItemWidget>
                         color: Colors.white,
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onDoubleTap: _copyArticleId,
+                      child: Text(
+                        'ID: ${widget.item.url()}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -549,13 +797,25 @@ class _DownloadItemWidgetState extends State<DownloadItemWidget>
     final isBig = widget.viewType == DownloadResultType.bigLine;
     final thumbHeight = isBig ? 136.0 : 104.0;
     final thumbWidth = isBig ? 96.0 : 74.0;
+    final selected = widget.selectionMode && widget.isSelected;
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       clipBehavior: Clip.antiAlias,
+      color: selected ? Settings.majorColor.value.withAlpha(28) : null,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: selected
+            ? BorderSide(color: Settings.majorColor.value, width: 1.8)
+            : BorderSide.none,
+      ),
       child: InkWell(
-        onTap: state == 0 ? _openOfflineViewer : _showItemMenu,
-        onLongPress: _showItemMenu,
+        onTap: widget.selectionMode
+            ? widget.onToggleSelect
+            : (state == 0 ? _openOfflineViewer : _showItemMenu),
+        onLongPress: widget.selectionMode
+            ? widget.onToggleSelect
+            : (widget.onEnterSelectionMode ?? _showItemMenu),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -573,6 +833,26 @@ class _DownloadItemWidgetState extends State<DownloadItemWidget>
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onDoubleTap: _copyArticleId,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Text(
+                          'ID: ${widget.item.url()}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Settings.themeWhat.value
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade600,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                       ),
                     ),
                     if (artist.isNotEmpty) ...[
@@ -626,28 +906,38 @@ class _DownloadItemWidgetState extends State<DownloadItemWidget>
                 ),
               ),
             ),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (_isRunning)
-                  IconButton(
-                    icon: const Icon(Icons.pause_circle_outline),
-                    tooltip: '중지',
-                    onPressed: _stopDownload,
-                  )
-                else if (state != 0)
-                  IconButton(
-                    icon: const Icon(Icons.play_circle_outline),
-                    tooltip: '재개',
-                    onPressed: () => _startDownload(skipExisting: true),
-                  ),
-                IconButton(
-                  icon: const Icon(Icons.more_vert),
-                  tooltip: '관리 메뉴',
-                  onPressed: _showItemMenu,
+            if (widget.selectionMode)
+              Padding(
+                padding: const EdgeInsets.only(right: 4, top: 8),
+                child: Checkbox(
+                  value: selected,
+                  activeColor: Settings.majorColor.value,
+                  onChanged: (_) => widget.onToggleSelect?.call(),
                 ),
-              ],
-            ),
+              )
+            else
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_isRunning)
+                    IconButton(
+                      icon: const Icon(Icons.pause_circle_outline),
+                      tooltip: '중지',
+                      onPressed: _stopDownload,
+                    )
+                  else if (state != 0)
+                    IconButton(
+                      icon: const Icon(Icons.play_circle_outline),
+                      tooltip: '재개',
+                      onPressed: () => _startDownload(skipExisting: true),
+                    ),
+                  IconButton(
+                    icon: const Icon(Icons.more_vert),
+                    tooltip: '관리 메뉴',
+                    onPressed: _showItemMenu,
+                  ),
+                ],
+              ),
           ],
         ),
       ),

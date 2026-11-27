@@ -21,6 +21,7 @@ import 'package:violet/log/log.dart';
 import 'package:violet/settings/settings.dart';
 import 'package:violet/src/rust/api/message_search.dart' as rust_msg;
 import 'package:violet/src/rust/api/simple.dart' as rust_simple;
+import 'package:violet/src/rust/frb_generated.dart';
 
 enum CorpusInstallState {
   notInstalled,
@@ -195,6 +196,9 @@ class MessageCorpusManager extends ChangeNotifier {
       _localBytes = 0;
       _emit(const CorpusDownloadProgress(state: CorpusInstallState.notInstalled));
       return false;
+    }
+    if (!RustLib.instance.initialized) {
+      throw StateError('네이티브 검색 엔진(RustLib)이 초기화되지 않았습니다.');
     }
 
     _emit(const CorpusDownloadProgress(
@@ -455,6 +459,9 @@ class MessageCorpusManager extends ChangeNotifier {
     String versionTag = '',
     bool deleteSourceAfterInstall = false,
   }) async {
+    if (!RustLib.instance.initialized) {
+      throw StateError('네이티브 검색 엔진(RustLib)이 초기화되지 않았습니다.');
+    }
     final corpusDir = await getCorpusDir();
     final stagingDir = Directory(p.join(corpusDir.path, '_staging'));
     if (await stagingDir.exists()) await stagingDir.delete(recursive: true);
@@ -493,7 +500,7 @@ class MessageCorpusManager extends ChangeNotifier {
       }
 
       _engineMounted = false;
-      rust_msg.mobileSearchUnload();
+      _safeUnloadRustSearch();
 
       for (final old in await findInstalledFscmFiles()) {
         if (await old.exists()) await old.delete();
@@ -531,10 +538,19 @@ class MessageCorpusManager extends ChangeNotifier {
     _cancelToken = null;
   }
 
+  void _safeUnloadRustSearch() {
+    if (!RustLib.instance.initialized) return;
+    try {
+      rust_msg.mobileSearchUnload();
+    } catch (e) {
+      Logger.warning('[MessageCorpus] mobileSearchUnload failed: $e');
+    }
+  }
+
   Future<void> disable({required bool deleteFiles}) async {
     cancelDownload();
     _engineMounted = false;
-    rust_msg.mobileSearchUnload();
+    _safeUnloadRustSearch();
     await Settings.enableMessageSearch.setValue(false);
     await Settings.inViewerMessageSearch.setValue(false);
     if (deleteFiles) {
@@ -546,7 +562,7 @@ class MessageCorpusManager extends ChangeNotifier {
 
   Future<void> deleteCorpusFiles() async {
     _engineMounted = false;
-    rust_msg.mobileSearchUnload();
+    _safeUnloadRustSearch();
     final files = await findInstalledFscmFiles();
     for (final f in files) {
       if (await f.exists()) await f.delete();
@@ -1202,15 +1218,31 @@ class MessageCorpusManager extends ChangeNotifier {
     return null;
   }
 
-  rust_msg.MobileSearchProgress get progressSnapshot =>
-      rust_msg.mobileSearchProgress();
+  rust_msg.MobileSearchProgress get progressSnapshot {
+    if (!RustLib.instance.initialized) {
+      return rust_msg.MobileSearchProgress(
+        initialized: false,
+        active: false,
+        cancelled: false,
+        scannedRecords: BigInt.zero,
+        plannedRecords: BigInt.zero,
+        totalRecords: BigInt.zero,
+        memoryBudgetMb: 0,
+        maxArticleId: 0,
+      );
+    }
+    return rust_msg.mobileSearchProgress();
+  }
 
-  bool cancelActiveSearch() => rust_msg.mobileSearchCancel();
+  bool cancelActiveSearch() {
+    if (!RustLib.instance.initialized) return false;
+    return rust_msg.mobileSearchCancel();
+  }
 
   bool _popularSynced = false;
 
   Future<void> ensurePopularRanksSynced() async {
-    if (_popularSynced) return;
+    if (_popularSynced || !RustLib.instance.initialized) return;
     await Population.ensureLoaded();
     final pop = Population.population;
     if (pop.isEmpty) return;

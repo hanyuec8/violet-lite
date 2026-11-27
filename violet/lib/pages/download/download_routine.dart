@@ -56,11 +56,13 @@ class DownloadRoutine {
       final generalDownloadProgress = GeneralDownloadProgress(
         simpleInfoCallback: (info) async {
           result['Info'] = info;
+          item.result = result;
           setStateCallback.call();
         },
         thumbnailCallback: (url, header) async {
           result['Thumbnail'] = url;
           result['ThumbnailHeader'] = header;
+          item.result = result;
           thumbnailCallback.call();
         },
         progressCallback: progressCallback,
@@ -158,8 +160,11 @@ class DownloadRoutine {
       final thumbFile = File(thumbnailTask!.downloadPath!);
       if (!await thumbFile.exists() || await thumbFile.length() < 5) {
         thumbnailTask!.completeCallback = () {
+          result['LocalThumbnail'] = thumbnailTask!.downloadPath;
+          item.result = result;
           thumbnailCallback.call();
         };
+        thumbnailTask!.errorCallback = (_) {};
         downloader.appendTask(thumbnailTask!);
       }
     }

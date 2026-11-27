@@ -238,18 +238,18 @@ pub fn mobile_search_set_popular_ids(ids: Vec<u32>) -> u32 {
 }
 
 /// 전체·범위·작품 조건 화이트리스트 대상 모바일 경량 대사 검색을 실행합니다.
-pub async fn mobile_search_query(
+pub fn mobile_search_query(
     query: String,
     contains_mode: bool,
     take: u32,
     filter: Option<MobileSearchFilter>,
 ) -> Result<Vec<MobileMessageHit>, String> {
-    let res = mobile_search_query_ex(query, contains_mode, take, filter).await?;
+    let res = mobile_search_query_ex(query, contains_mode, take, filter)?;
     Ok(res.hits)
 }
 
 /// 전체 일치 건수(`total_matched`) 및 정렬 옵션(`sort_mode`)을 포함한 대사 검색을 실행합니다.
-pub async fn mobile_search_query_ex(
+pub fn mobile_search_query_ex(
     query: String,
     contains_mode: bool,
     take: u32,
@@ -282,38 +282,23 @@ pub async fn mobile_search_query_ex(
         }
     };
 
-    tokio_blocking_or_spawn(move || {
-        let outcome =
-            search_global_with_sort(internal_scope, &query, contains_mode, take as usize, sort_mode)
-                .map_err(|e| e.to_string())?;
-        Ok(MobileSearchResponse {
-            total_matched: outcome.total_matched,
-            hits: outcome.hits.into_iter().map(MobileMessageHit::from).collect(),
-        })
+    let outcome =
+        search_global_with_sort(internal_scope, &query, contains_mode, take as usize, sort_mode)
+            .map_err(|e| e.to_string())?;
+    Ok(MobileSearchResponse {
+        total_matched: outcome.total_matched,
+        hits: outcome.hits.into_iter().map(MobileMessageHit::from).collect(),
     })
 }
 
 /// 뷰어 내 단일 작품 대사 검색(또는 빈 쿼리 시 작품 전체 대사 조회)을 수행합니다.
-pub async fn mobile_search_article(
+pub fn mobile_search_article(
     article_id: u32,
     query: String,
 ) -> Result<Vec<MobileMessageHit>, String> {
-    tokio_blocking_or_spawn(move || {
-        let q_opt = (!query.trim().is_empty()).then_some(query.as_str());
-        let hits = article_global(article_id, q_opt).map_err(|e| e.to_string())?;
-        Ok(hits.into_iter().map(MobileMessageHit::from).collect())
-    })
-}
-
-#[inline]
-fn tokio_blocking_or_spawn<T, F>(f: F) -> Result<T, String>
-where
-    T: Send + 'static,
-    F: FnOnce() -> Result<T, String> + Send + 'static,
-{
-    std::thread::spawn(f)
-        .join()
-        .map_err(|_| "mobile search worker thread panicked".to_string())?
+    let q_opt = (!query.trim().is_empty()).then_some(query.as_str());
+    let hits = article_global(article_id, q_opt).map_err(|e| e.to_string())?;
+    Ok(hits.into_iter().map(MobileMessageHit::from).collect())
 }
 
 #[derive(Clone, Debug)]

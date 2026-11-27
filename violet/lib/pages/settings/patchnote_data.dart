@@ -21,6 +21,18 @@ class PatchModel {
 
 final patches = [
   PatchModel(
+    dateTime: DateTime(2026, 11, 27),
+    version: '2.2.9 Patch',
+    contents: [
+      'Performance & Stability: migrated Dart logic to native Rust with hardened async and data integrity',
+      'Download: added batch ID enqueueing, pre-validation for non-existent IDs, double-tap ID copy, and multi-select batch actions',
+    ],
+    contentsKorean: [
+      '성능 및 안정성: dart를 Rust 네이티브로 이관하고 비동기·데이터 무결성 강화',
+      '다운로드: 여러 작품 번호 일괄 추가, 미존재 품번 사전 검증, 카드 ID 더블탭 복사 및 다중 선택 일괄 관리 추가',
+    ],
+  ),
+  PatchModel(
     dateTime: DateTime(2026, 11, 24),
     version: '2.2.8 Patch',
     contents: [

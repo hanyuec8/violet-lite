@@ -128,6 +128,9 @@ class HentaiManager {
       'https://ltn.gold-usergeneratedcontent.net/galleryblock/$id.html',
       headers: headers,
     );
+    if (hh.statusCode != 200 || hh.body.trim().isEmpty) {
+      throw Exception('Hitomi article not found: $id (status ${hh.statusCode})');
+    }
     final article = await HitomiParser.parseGalleryBlock(hh.body);
     final gallery = await tryFetchHitomiGalleryInfo(id);
     final meta = {
@@ -311,6 +314,9 @@ class HentaiManager {
       'https://ltn.gold-usergeneratedcontent.net/galleryblock/$id.html',
       headers: headers,
     );
+    if (res.statusCode != 200 || res.body.trim().isEmpty) {
+      throw Exception('Hitomi article not found: $id (status ${res.statusCode})');
+    }
 
     final article = await HitomiParser.parseGalleryBlock(res.body);
     final gallery = await tryFetchHitomiGalleryInfo(int.parse(id));
@@ -504,7 +510,7 @@ class HentaiManager {
         headers: {'Cookie': '$cookie;sl=dm_2'},
       )).body;
 
-      final result = EHParser.parseReulstPageExtendedListView(html);
+      final result = await EHParser.parseReulstPageExtendedListViewAsync(html);
 
       return result.map((element) {
         final tag = <String>[];

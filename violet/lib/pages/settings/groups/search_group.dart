@@ -635,6 +635,28 @@ class _MessageSearchSettingTile extends StatelessWidget {
     }
   }
 
+  Widget _buildDeleteCorpusButton(MessageCorpusManager mgr) {
+    return TextButton.icon(
+      icon: const Icon(
+        Icons.delete_outline,
+        size: 16,
+        color: Colors.redAccent,
+      ),
+      label: const Text(
+        '레코드 삭제',
+        style: TextStyle(fontSize: 12, color: Colors.redAccent),
+      ),
+      onPressed: () async {
+        await mgr.disable(deleteFiles: true);
+        showToast(
+          level: ToastLevel.check,
+          message: '한국어 대사 레코드 파일이 삭제되었습니다.',
+        );
+        onReload();
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final mgr = MessageCorpusManager.instance;
@@ -738,6 +760,7 @@ class _MessageSearchSettingTile extends StatelessWidget {
                       label: const Text('다시 시도', style: TextStyle(fontSize: 12)),
                       onPressed: () => _handleToggle(context, true),
                     ),
+                    if (!enabled) _buildDeleteCorpusButton(mgr),
                   ],
                 ),
               ),
@@ -762,25 +785,7 @@ class _MessageSearchSettingTile extends StatelessWidget {
                         onReload();
                       },
                     ),
-                    TextButton.icon(
-                      icon: const Icon(
-                        Icons.delete_outline,
-                        size: 16,
-                        color: Colors.redAccent,
-                      ),
-                      label: const Text(
-                        '레코드 삭제',
-                        style: TextStyle(fontSize: 12, color: Colors.redAccent),
-                      ),
-                      onPressed: () async {
-                        await mgr.disable(deleteFiles: true);
-                        showToast(
-                          level: ToastLevel.check,
-                          message: '한국어 대사 레코드 파일이 삭제되었습니다.',
-                        );
-                        onReload();
-                      },
-                    ),
+                    _buildDeleteCorpusButton(mgr),
                   ],
                 ),
               ),

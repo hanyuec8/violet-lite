@@ -5,16 +5,13 @@ use image::imageops::FilterType;
 
 /// 썸네일 이미지 바이트(WebP, PNG, JPEG 등)로부터 64비트 지각적 차이 해시(dHash, Difference Hash)를 계산합니다.
 /// 이미지를 9x8 그레이스케일로 다운샘플링한 후, 인접 픽셀 밝기 비교를 통해 64비트 u64를 산출합니다.
-#[flutter_rust_bridge::frb(sync)]
-pub fn compute_dhash(bytes: Vec<u8>) -> Option<u64> {
+pub fn compute_dhash(bytes: Vec<u8>) -> Result<u64, String> {
     if bytes.is_empty() {
-        return None;
+        return Err("empty image bytes".to_string());
     }
 
-    let img = match image::load_from_memory(&bytes) {
-        Ok(img) => img,
-        Err(_) => return None,
-    };
+    let img = image::load_from_memory(&bytes)
+        .map_err(|e| format!("failed to decode image for dhash: {e}"))?;
 
     // 9x8 그레이스케일 다운샘플링
     let luma = img
@@ -31,7 +28,7 @@ pub fn compute_dhash(bytes: Vec<u8>) -> Option<u64> {
         }
     }
 
-    Some(hash)
+    Ok(hash)
 }
 
 /// 두 64비트 dHash 간의 해밍 거리(Hamming Distance)를 기반으로 시각적 유사도 백분율(0.0% ~ 100.0%)을 반환합니다.
@@ -73,6 +70,8 @@ mod tests {
         .unwrap();
 
         let hash = compute_dhash(png_bytes);
-        assert!(hash.is_some());
+        assert!(hash.is_ok());
+        assert!(compute_dhash(Vec::new()).is_err());
+        assert!(compute_dhash(vec![1, 2, 3, 4]).is_err());
     }
 }

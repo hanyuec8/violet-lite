@@ -15,7 +15,7 @@ class MangaTranslationPipeline {
   MangaTranslationPipeline._internal();
 
   /// 1단계: 1채널 그레이스케일 전처리 및 리사이징
-  rust_vision.PreprocessedMangaPage? preprocessGrayscale(
+  Future<rust_vision.PreprocessedMangaPage?> preprocessGrayscale(
     Uint8List imageBytes, {
     int maxLongEdge = 1280,
   }) {
@@ -26,7 +26,7 @@ class MangaTranslationPipeline {
   }
 
   /// 2단계: 박스 외곽 테두리 밝기 히스토그램 기반 말풍선 필터링 (배경/효과음 제거)
-  List<rust_vision.FilteredBubbleResult> filterSpeechBubbles({
+  Future<List<rust_vision.FilteredBubbleResult>> filterSpeechBubbles({
     required Uint8List lumaBytes,
     required int width,
     required int height,
@@ -47,7 +47,7 @@ class MangaTranslationPipeline {
   }
 
   /// 3단계: Zero-AI Connected Components 기반 고속 글자 지우기
-  rust_vision.ZeroAiEraseResult? eraseBubbleTextZeroAi({
+  Future<rust_vision.ZeroAiEraseResult?> eraseBubbleTextZeroAi({
     required Uint8List lumaBytes,
     required int width,
     required int height,

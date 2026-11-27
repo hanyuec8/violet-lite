@@ -77,7 +77,9 @@ impl MobileStore {
             let (ready_sender, ready_blocks) =
                 std::sync::mpsc::sync_channel::<(usize, MessageBlock)>(0);
             let (empty_sender, empty_blocks) = std::sync::mpsc::sync_channel::<MessageBlock>(1);
-            empty_sender.send(MessageBlock::default()).unwrap();
+            empty_sender
+                .send(MessageBlock::default())
+                .map_err(|_| io::Error::other("mobile scan channel closed"))?;
 
             let producer = threads.spawn(move || {
                 self.read_blocks_scoped(scope, |base, block| {
@@ -357,16 +359,29 @@ impl<'a> BlockReader<'a> {
 pub(crate) fn validate_block_text(block: &mut MessageBlock, low: u64) -> io::Result<()> {
     let text = std::str::from_utf8(&block.message_bytes).ok();
     for meta in &mut block.messages {
-        meta.message.offset -= low;
-        let start = meta.message.offset as usize;
-        let end = start + meta.message.len as usize;
+        meta.message.offset = meta
+            .message
+            .offset
+            .checked_sub(low)
+            .ok_or_else(|| invalid_data("FSCM text offset underflow"))?;
+        let start = usize::try_from(meta.message.offset)
+            .map_err(|_| invalid_data("FSCM text offset overflow"))?;
+        let end = start
+            .checked_add(meta.message.len as usize)
+            .ok_or_else(|| invalid_data("FSCM text range overflow"))?;
+        if end > block.message_bytes.len() {
+            return Err(invalid_data("FSCM text range out of bounds"));
+        }
         if let Some(valid_str) = text {
             if !valid_str.is_char_boundary(start) || !valid_str.is_char_boundary(end) {
                 return Err(invalid_data("invalid message UTF-8 boundary"));
             }
         } else {
-            std::str::from_utf8(&block.message_bytes[start..end])
-                .map_err(|_| invalid_data("invalid message UTF-8"))?;
+            let slice = block
+                .message_bytes
+                .get(start..end)
+                .ok_or_else(|| invalid_data("FSCM text range out of bounds"))?;
+            std::str::from_utf8(slice).map_err(|_| invalid_data("invalid message UTF-8"))?;
         }
     }
     Ok(())
