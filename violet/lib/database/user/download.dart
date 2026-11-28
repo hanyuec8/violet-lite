@@ -5,6 +5,7 @@ import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:synchronized/synchronized.dart';
 import 'package:violet/database/query.dart';
@@ -252,6 +253,7 @@ class DownloadItemModel {
 }
 
 class Download {
+  static final ValueNotifier<int> downloadVersion = ValueNotifier<int>(0);
   static Download? _instance;
   static Lock lock = Lock();
   final Lock _createLock = Lock();
@@ -336,6 +338,7 @@ class Download {
     _downloadedItems = <int, DownloadItemModel>{};
     _isDownloadedFileExistsCache.clear();
     await init();
+    downloadVersion.value++;
   }
 
   bool isDownloadedArticle(int id, bool checkFileExists) {
@@ -370,12 +373,14 @@ class Download {
     _downloadedChecker.add(id);
     _downloadedItems[id] = item;
     _isDownloadedFileExistsCache.remove(id);
+    downloadVersion.value++;
   }
 
   void removeDownloaded(int id) {
     _downloadedChecker.remove(id);
     _downloadedItems.remove(id);
     _isDownloadedFileExistsCache.remove(id);
+    downloadVersion.value++;
   }
 
   DownloadItemModel? getDownloadedArticle(int id) => _downloadedItems[id];

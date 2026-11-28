@@ -10,6 +10,7 @@ import 'package:html_unescape/html_unescape.dart';
 import 'package:intl/intl.dart';
 import 'package:violet/database/query.dart';
 import 'package:violet/database/user/bookmark.dart';
+import 'package:violet/database/user/download.dart';
 import 'package:violet/database/user/record.dart';
 import 'package:violet/model/article_list_item.dart';
 import 'package:violet/pages/common/utils.dart';
@@ -22,6 +23,7 @@ class ArticleListItemWidgetController extends GetxController {
   var disposed = false;
 
   var isBookmarked = false.obs;
+  var isDownloaded = false.obs;
 
   var isLatestRead = false.obs;
   var latestReadPage = 0.obs;
@@ -58,9 +60,18 @@ class ArticleListItemWidgetController extends GetxController {
 
     setSize();
     checkIsBookmarked();
+    checkIsDownloaded();
+    Download.downloadVersion.addListener(checkIsDownloaded);
     checkLastRead();
     initTexts();
     setProvider();
+  }
+
+  @override
+  void onClose() {
+    disposed = true;
+    Download.downloadVersion.removeListener(checkIsDownloaded);
+    super.onClose();
   }
 
 
@@ -98,6 +109,16 @@ class ArticleListItemWidgetController extends GetxController {
     Bookmark.getInstance().then((value) async {
       isBookmarked.value = await value.isBookmark(
         articleListItem.queryResult.id(),
+      );
+    });
+  }
+
+  void checkIsDownloaded() {
+    Download.getInstance().then((value) {
+      if (disposed) return;
+      isDownloaded.value = value.isDownloadedArticle(
+        articleListItem.queryResult.id(),
+        false,
       );
     });
   }

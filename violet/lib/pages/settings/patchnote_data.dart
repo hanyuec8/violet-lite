@@ -22,6 +22,16 @@ class PatchModel {
 final patches = [
   PatchModel(
     dateTime: DateTime(2026, 11, 28),
+    version: '2.2.11 Patch',
+    contents: [
+      'Search: added downloaded status check badge on article card thumbnails',
+    ],
+    contentsKorean: [
+      '검색: 일반 검색 및 목록 카드 썸네일에 다운로드 완료 체크 표시 추가',
+    ],
+  ),
+  PatchModel(
+    dateTime: DateTime(2026, 11, 28),
     version: '2.2.10 Patch',
     contents: [
       'Search: added Default Tag settings applied from the main feed and OR boolean search support',

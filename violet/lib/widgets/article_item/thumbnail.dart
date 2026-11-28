@@ -54,6 +54,15 @@ class ThumbnailWidget extends StatelessWidget {
                     ),
                   ),
                   Obx(
+                    () => DownloadedIndicatorWidget(
+                      isDownloaded: c.isDownloaded.value,
+                      hasReadProgress:
+                          c.isLatestRead.value &&
+                          Settings.showArticleProgress.value,
+                      greyScale: greyScale,
+                    ),
+                  ),
+                  Obx(
                     () => PagesOverlayWidget(
                       imageCount: c.imageCount.value,
                       showDetail: c.articleListItem.showDetail,
@@ -312,6 +321,52 @@ class PagesOverlayWidget extends StatelessWidget {
               padding: const EdgeInsets.all(6.0),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class DownloadedIndicatorWidget extends StatelessWidget {
+  final bool isDownloaded;
+  final bool hasReadProgress;
+  final bool greyScale;
+
+  const DownloadedIndicatorWidget({
+    super.key,
+    required this.isDownloaded,
+    required this.hasReadProgress,
+    required this.greyScale,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (!isDownloaded) return const SizedBox.shrink();
+
+    return Positioned(
+      top: hasReadProgress ? 13 : 5,
+      right: 5,
+      child: Container(
+        width: 20,
+        height: 20,
+        decoration: BoxDecoration(
+          color: greyScale
+              ? const Color(0xFF626262)
+              : Colors.green.shade600.withValues(alpha: 0.92),
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 1.5),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black45,
+              blurRadius: 3,
+              offset: Offset(0, 1),
+            ),
+          ],
+        ),
+        child: const Icon(
+          Icons.check,
+          size: 13,
+          color: Colors.white,
         ),
       ),
     );
