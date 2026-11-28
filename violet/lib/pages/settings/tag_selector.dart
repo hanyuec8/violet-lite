@@ -29,6 +29,10 @@ class _TagSelectorDialogState extends State<TagSelectorDialog> {
       _searchController = TextEditingController(
         text: Settings.includeTags.value,
       );
+    } else if (widget.what == 'default') {
+      _searchController = TextEditingController(
+        text: Settings.defaultTags.value,
+      );
     } else if (widget.what == 'exclude') {
       _searchController = TextEditingController(
         text: Settings.excludeTags.value.join(' '),
@@ -119,12 +123,56 @@ class _TagSelectorDialogState extends State<TagSelectorDialog> {
                           ),
                         ),
                 ),
-                widget.what == 'include'
-                    ? Text(
-                        Translations.instance!.trans('tagmsgdefault'),
-                        style: const TextStyle(fontSize: 14.0),
-                      )
-                    : Container(),
+                if (widget.what == 'include')
+                  Text(
+                    Translations.instance!.trans('tagmsgdefault'),
+                    style: const TextStyle(fontSize: 14.0),
+                  )
+                else if (widget.what == 'default')
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6.0, bottom: 4.0),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '첫 화면부터 항상 적용됩니다. or 검색 가능 (예: female:females_only or female:sole_female)',
+                            style: TextStyle(
+                              fontSize: 12.0,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ActionChip(
+                          label: const Text('OR 추가'),
+                          onPressed: () {
+                            final text = _searchController.text;
+                            final offset = _searchController.selection.baseOffset;
+                            final pos =
+                                (offset >= 0 && offset <= text.length)
+                                    ? offset
+                                    : text.length;
+                            final before = text.substring(0, pos);
+                            final after = text.substring(pos);
+                            final prefixSpace =
+                                before.isEmpty || before.endsWith(' ')
+                                    ? ''
+                                    : ' ';
+                            final suffixSpace =
+                                after.isEmpty || after.startsWith(' ')
+                                    ? ''
+                                    : ' ';
+                            final insertion = '${prefixSpace}or $suffixSpace';
+                            _searchController.text =
+                                '$before$insertion$after';
+                            final nextOffset = before.length + insertion.length;
+                            _searchController.selection =
+                                TextSelection.collapsed(offset: nextOffset);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),
@@ -173,6 +221,13 @@ class _TagSelectorDialogState extends State<TagSelectorDialog> {
     }
 
     int pos = selection.base.offset - 1;
+    if (pos < 0) pos = target.length - 1;
+    if (pos < 0) {
+      setState(() {
+        _searchLists.clear();
+      });
+      return;
+    }
     for (; pos > 0; pos--) {
       if (target[pos] == ' ') {
         pos++;
@@ -189,7 +244,7 @@ class _TagSelectorDialogState extends State<TagSelectorDialog> {
       token = token.substring(1);
       pos++;
     }
-    if (token == '') {
+    if (token == '' || token.toLowerCase() == 'or') {
       setState(() {
         _searchLists.clear();
       });

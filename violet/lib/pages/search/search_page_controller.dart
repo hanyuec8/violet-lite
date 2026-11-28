@@ -131,7 +131,10 @@ class SearchPageController extends GetxController {
 
   /// 현재 화면이 '마지막으로 본 작품' 기록 대상(메인 검색 + lang:korean + Hitomi 전용 필터, 태그 검색어 없음)인지 판별합니다.
   bool get canRecordLastViewedArticle {
-    if (!isMainSearch || !isHitomiFilterUsed.value || !isCurrentSearchKorean()) {
+    if (!isMainSearch ||
+        !isHitomiFilterUsed.value ||
+        !isCurrentSearchKorean() ||
+        Settings.normalizedDefaultTags.isNotEmpty) {
       return false;
     }
     final raw = (latestQuery?.$2 ?? '').trim();
@@ -374,11 +377,15 @@ class SearchPageController extends GetxController {
           page: fetchedPage,
           pageSize: defaultPageSize,
           sortMode: searchSortMode.value,
+          applyDefaultTags: isMainSearch,
         );
         mainHybridPage++;
 
         if (hybridList.isEmpty) {
-          if (attempts < maxAttempts || (attempts < 3 && Settings.excludeTags.value.isNotEmpty)) {
+          if (attempts < maxAttempts ||
+              (attempts < 3 &&
+                  (Settings.excludeTags.value.isNotEmpty ||
+                      Settings.normalizedDefaultTags.isNotEmpty))) {
             continue;
           }
           _queryEnd = true;

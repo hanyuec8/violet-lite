@@ -9,6 +9,7 @@ import 'package:violet/component/hentai.dart';
 import 'package:violet/component/hitomi/hitomi_nozomi.dart';
 import 'package:violet/component/hitomi/hitomi_parser.dart';
 import 'package:violet/component/hitomi/population.dart';
+import 'package:violet/component/query_boolean_parser.dart';
 import 'package:violet/component/query_translate.dart';
 import 'package:violet/database/database.dart';
 import 'package:violet/database/expunged_database.dart';
@@ -470,10 +471,22 @@ class HybridLoader {
           targetUrl = HitomiNozomi.getIndexAllUrl();
         }
       } else {
-        final tokens = cleanQuery.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
-        final langToken = tokens.where((t) => t.startsWith('lang:') || t.startsWith('language:')).firstOrNull;
-        final nonLang = tokens.where((t) => !t.startsWith('lang:') && !t.startsWith('language:')).toList();
-        if (nonLang.isEmpty && langToken != null) {
+        final tokens = QueryBooleanParser.tokenize(cleanQuery);
+        final hasOr = tokens.any((t) => t.toLowerCase() == 'or');
+        final langToken = tokens
+            .where((t) => t.toLowerCase().startsWith('lang:') || t.toLowerCase().startsWith('language:'))
+            .firstOrNull;
+        final nonLang = tokens
+            .where(
+              (t) =>
+                  t != '(' &&
+                  t != ')' &&
+                  t.toLowerCase() != 'or' &&
+                  !t.toLowerCase().startsWith('lang:') &&
+                  !t.toLowerCase().startsWith('language:'),
+            )
+            .toList();
+        if (!hasOr && nonLang.isEmpty && langToken != null) {
           final l = langToken.split(':').last;
           targetUrl = HitomiNozomi.getLanguageIndexUrl(l);
         } else {
@@ -558,6 +571,100 @@ class HybridLoader {
     return false;
   }
 
+  static bool _isExplicitLangTerm(String coreToken) {
+    final lower = coreToken.toLowerCase();
+    return lower.startsWith('lang:') || lower.startsWith('language:');
+  }
+
+  static bool _containsLangNode(QueryBoolNode node) {
+    return switch (node) {
+      QueryTermNode(:final coreToken) => _isExplicitLangTerm(coreToken),
+      QueryAndNode(:final children) => children.any(_containsLangNode),
+      QueryOrNode(:final children) => children.any(_containsLangNode),
+      QueryNotNode(:final child) => _containsLangNode(child),
+    };
+  }
+
+  static bool _hasLangInsideOr(QueryBoolNode node) {
+    return switch (node) {
+      QueryOrNode(:final children) => children.any(_containsLangNode),
+      QueryAndNode(:final children) => children.any(_hasLangInsideOr),
+      QueryNotNode(:final child) => _hasLangInsideOr(child),
+      QueryTermNode() => false,
+    };
+  }
+
+  static QueryBoolNode? _simplifyForNozomi(
+    QueryBoolNode node, {
+    required bool stripLang,
+  }) {
+    switch (node) {
+      case QueryTermNode():
+        if (node.negative ||
+            QueryBooleanParser.isDirectiveToken(node.coreToken) ||
+            QueryBooleanParser.isFilterOrNegativeToken(node.coreToken)) {
+          return null;
+        }
+        if (stripLang && _isExplicitLangTerm(node.coreToken)) {
+          return null;
+        }
+        return node;
+      case QueryNotNode():
+        return null;
+      case QueryAndNode():
+        final simplified = <QueryBoolNode>[];
+        for (final child in node.children) {
+          final next = _simplifyForNozomi(child, stripLang: stripLang);
+          if (next != null) simplified.add(next);
+        }
+        if (simplified.isEmpty) return null;
+        if (simplified.length == 1) return simplified.first;
+        return QueryAndNode(simplified);
+      case QueryOrNode():
+        final simplified = <QueryBoolNode>[];
+        for (final child in node.children) {
+          final next = _simplifyForNozomi(child, stripLang: stripLang);
+          if (next == null) {
+            return null;
+          }
+          simplified.add(next);
+        }
+        if (simplified.isEmpty) return null;
+        if (simplified.length == 1) return simplified.first;
+        return QueryOrNode(simplified);
+    }
+  }
+
+  static List<int> _intersectIdLists(List<List<int>> lists) {
+    if (lists.isEmpty || lists.any((l) => l.isEmpty)) return const <int>[];
+    try {
+      final rustLists = lists.map((l) => Uint32List.fromList(l)).toList();
+      return rust_nozomi.intersectNozomiIds(lists: rustLists);
+    } catch (_) {
+      Set<int> intersection = lists.first.toSet();
+      for (int i = 1; i < lists.length; i++) {
+        intersection = intersection.intersection(lists[i].toSet());
+        if (intersection.isEmpty) return const <int>[];
+      }
+      return intersection.toList()..sort((a, b) => b.compareTo(a));
+    }
+  }
+
+  static List<int> _unionIdLists(List<List<int>> lists) {
+    final nonEmpty = lists.where((l) => l.isNotEmpty).toList();
+    if (nonEmpty.isEmpty) return const <int>[];
+    try {
+      final rustLists = nonEmpty.map((l) => Uint32List.fromList(l)).toList();
+      return rust_nozomi.unionNozomiIds(lists: rustLists);
+    } catch (_) {
+      final merged = <int>{};
+      for (final list in nonEmpty) {
+        merged.addAll(list);
+      }
+      return merged.toList()..sort((a, b) => b.compareTo(a));
+    }
+  }
+
   static Future<List<int>> fetchGalleryIdsForQuery({
     required String query,
     required int page,
@@ -581,35 +688,45 @@ class HybridLoader {
       );
     }
 
-    // 복합 쿼리의 경우 토큰 추출 및 언어 토큰 감지
-    final tokens =
-        cleanQuery.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
+    final parsedAst = QueryBooleanParser.parse(cleanQuery);
+    if (parsedAst == null) {
+      if (targetLang != 'all') {
+        final ids = await HitomiNozomi.fetchGalleryIds(
+          HitomiNozomi.getLanguageIndexUrl(targetLang),
+          page,
+          pageSize: pageSize,
+        );
+        if (ids.isNotEmpty) return ids;
+      }
+      return await HitomiNozomi.fetchGalleryIds(
+        HitomiNozomi.getIndexAllUrl(),
+        page,
+        pageSize: pageSize,
+      );
+    }
 
+    final langInOr = _hasLangInsideOr(parsedAst);
     String effectiveLang = targetLang;
     String? explicitLang;
-    final nonLangTokens = <String>[];
 
-    for (final token in tokens) {
-      final lower = token.toLowerCase();
-      if (lower.startsWith('lang:')) {
-        explicitLang = lower.substring(5).trim();
-      } else if (lower.startsWith('language:')) {
-        explicitLang = lower.substring(9).trim();
-      } else {
-        nonLangTokens.add(token);
+    if (!langInOr) {
+      for (final token in QueryBooleanParser.tokenize(cleanQuery)) {
+        final lower = token.toLowerCase();
+        if (lower.startsWith('lang:')) {
+          explicitLang = lower.substring(5).trim();
+        } else if (lower.startsWith('language:')) {
+          explicitLang = lower.substring(9).trim();
+        }
+      }
+      if (explicitLang != null && explicitLang.isNotEmpty) {
+        effectiveLang = explicitLang;
       }
     }
 
-    if (explicitLang != null && explicitLang.isNotEmpty) {
-      effectiveLang = explicitLang;
-    }
-
-    final positiveNozomiTokens = nonLangTokens
-        .where((t) => !_isFilterOrNegativeToken(t))
-        .toList();
+    final nozomiAst = _simplifyForNozomi(parsedAst, stripLang: !langInOr);
 
     // 언어 토큰만 있거나 부정/필터 토큰만 있는 경우 기본 언어/전체 인덱스 사용
-    if (positiveNozomiTokens.isEmpty) {
+    if (nozomiAst == null) {
       if (effectiveLang != 'all') {
         final ids = await HitomiNozomi.fetchGalleryIds(
           HitomiNozomi.getLanguageIndexUrl(effectiveLang),
@@ -626,61 +743,55 @@ class HybridLoader {
       );
     }
 
-    // 1) 다중 태그(복합 쿼리)인 경우: 각 긍정 태그별 상위 ID를 병렬 수집 후 Rust SIMD 교집합(Intersection) 산출
-    if (positiveNozomiTokens.length > 1) {
-      const multiTagFetchCount = 10000;
-      final tokenResults = await Future.wait(
-        positiveNozomiTokens.map((tok) => _fetchIdsForSingleTerm(
-              term: tok,
+    // 단일 태그인 경우: 단일 페이징 고속 조회
+    if (nozomiAst is QueryTermNode) {
+      return await _fetchIdsForSingleTerm(
+        term: nozomiAst.coreToken,
+        effectiveLang: effectiveLang,
+        offset: (page - 1) * pageSize,
+        count: pageSize,
+        explicitLang: explicitLang,
+      );
+    }
+
+    // 복합(AND / OR) 쿼리인 경우: 리프별 상위 ID 병렬 수집 후 Rust SIMD/AHashSet 교집합·합집합 평가
+    const multiTagFetchCount = 10000;
+    final termCache = <String, Future<List<int>>>{};
+
+    Future<List<int>> evalAst(QueryBoolNode node) async {
+      switch (node) {
+        case QueryTermNode(:final coreToken):
+          final cacheKey = coreToken.toLowerCase();
+          return await termCache.putIfAbsent(
+            cacheKey,
+            () => _fetchIdsForSingleTerm(
+              term: coreToken,
               effectiveLang: effectiveLang,
               offset: 0,
               count: multiTagFetchCount,
               explicitLang: explicitLang,
-            )),
-      );
-
-      // 어떤 태그의 결과가 0건이면 교집합도 0건
-      if (tokenResults.any((list) => list.isEmpty)) {
-        return [];
+            ),
+          );
+        case QueryAndNode(:final children):
+          final childLists = await Future.wait(children.map(evalAst));
+          return _intersectIdLists(childLists);
+        case QueryOrNode(:final children):
+          final childLists = await Future.wait(children.map(evalAst));
+          return _unionIdLists(childLists);
+        case QueryNotNode():
+          return const <int>[];
       }
-
-      List<int> sortedIntersection;
-      try {
-        final rustLists = tokenResults
-            .map((list) => Uint32List.fromList(list))
-            .toList();
-        sortedIntersection = rust_nozomi.intersectNozomiIds(lists: rustLists);
-      } catch (_) {
-        // Rust FFI 오류 시 Dart Set 교집합 폴백
-        Set<int> intersection = tokenResults.first.toSet();
-        for (int i = 1; i < tokenResults.length; i++) {
-          intersection = intersection.intersection(tokenResults[i].toSet());
-          if (intersection.isEmpty) return [];
-        }
-        sortedIntersection = intersection.toList()
-          ..sort((a, b) => b.compareTo(a));
-      }
-
-      final startIdx = (page - 1) * pageSize;
-      if (startIdx >= sortedIntersection.length) {
-        return [];
-      }
-      final endIdx = (startIdx + pageSize < sortedIntersection.length)
-          ? startIdx + pageSize
-          : sortedIntersection.length;
-      return sortedIntersection.sublist(startIdx, endIdx);
     }
 
-    // 2) 단일 태그(단독 쿼리)인 경우: 단일 페이징 고속 조회
-    final primaryTerm = positiveNozomiTokens.first;
-
-    return await _fetchIdsForSingleTerm(
-      term: primaryTerm,
-      effectiveLang: effectiveLang,
-      offset: (page - 1) * pageSize,
-      count: pageSize,
-      explicitLang: explicitLang,
-    );
+    final sortedIds = await evalAst(nozomiAst);
+    final startIdx = (page - 1) * pageSize;
+    if (startIdx >= sortedIds.length) {
+      return [];
+    }
+    final endIdx = (startIdx + pageSize < sortedIds.length)
+        ? startIdx + pageSize
+        : sortedIds.length;
+    return sortedIds.sublist(startIdx, endIdx);
   }
 
   /// 단일 검색어(태그, 작가, 그룹, 시리즈 등)에 대해 Nozomi ID 목록을 가져옵니다.
@@ -880,7 +991,7 @@ class HybridLoader {
     final filteredTokens = cleanQuery
         .split(RegExp(r'\s+'))
         .where((raw) {
-          final t = raw.trim().toLowerCase();
+          final t = raw.replaceAll(RegExp(r'[\(\)]'), '').trim().toLowerCase();
           if (t.isEmpty) return false;
           final core = t.startsWith('-') ? t.substring(1) : t;
           if (core.startsWith('id:') ||
@@ -895,8 +1006,10 @@ class HybridLoader {
         })
         .join(' ');
     var q = filteredTokens
+        .replaceAll(RegExp(r'[\(\)]'), ' ')
         .replaceAll(RegExp(r'\blang:', caseSensitive: false), 'language:')
         .replaceAll('_', ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
     if (q.toLowerCase().contains('language:')) {
       // 이미 쿼리에 language 태그가 명시되어 있다면 추가 prefix 없이 그대로 사용
@@ -905,6 +1018,44 @@ class HybridLoader {
     if (targetLang == 'all') return q;
     final langPrefix = 'language:$targetLang';
     return q.isEmpty ? langPrefix : '$langPrefix $q';
+  }
+
+  /// `or` 불리언 쿼리를 E-Hentai가 처리할 수 있는 DNF 분기별 단일 쿼리 목록으로 전개합니다.
+  static List<String> buildEHentaiQueries(
+    String pureQuery,
+    String targetLang, {
+    int maxBranches = 4,
+  }) {
+    final trimmed = pureQuery.trim();
+    if (trimmed.isEmpty || !QueryBooleanParser.containsOr(trimmed)) {
+      return [formatEHentaiQuery(trimmed, targetLang)];
+    }
+
+    final ast = QueryBooleanParser.parse(trimmed);
+    if (ast == null) {
+      return [formatEHentaiQuery(trimmed, targetLang)];
+    }
+
+    final branches = QueryBooleanParser.expandToDnf(
+      ast,
+      maxBranches: maxBranches,
+    );
+    if (branches.isEmpty) {
+      return [formatEHentaiQuery(trimmed, targetLang)];
+    }
+
+    final queries = <String>[];
+    final seen = <String>{};
+    for (final branch in branches) {
+      final q = formatEHentaiQuery(branch.join(' '), targetLang);
+      if (q.isNotEmpty && seen.add(q)) {
+        queries.add(q);
+      }
+    }
+    if (queries.isEmpty) {
+      return [formatEHentaiQuery('', targetLang)];
+    }
+    return queries;
   }
 
   /// Hitomi에서 수집된 작품 목록에 대해 로컬 DB, 북마크 DB, E-Hentai 대조군을 종합 검증하여
@@ -1347,14 +1498,15 @@ class HybridLoader {
     int page = 1,
     int pageSize = 50,
     SearchSortMode sortMode = SearchSortMode.latest,
+    bool applyDefaultTags = true,
   }) async {
-    final cleanQuery = query.trim();
+    final rawUserQuery = query.trim();
 
     // 순수 숫자(품번) 또는 id:숫자 단독 검색인 경우 직결 처리 (초고속 1건 반환, 부정형 -12345 제외)
-    final numericId = !cleanQuery.startsWith('-')
-        ? (int.tryParse(cleanQuery) ??
-            (cleanQuery.toLowerCase().startsWith('id:')
-                ? int.tryParse(cleanQuery.substring(3).trim())
+    final numericId = !rawUserQuery.startsWith('-')
+        ? (int.tryParse(rawUserQuery) ??
+            (rawUserQuery.toLowerCase().startsWith('id:')
+                ? int.tryParse(rawUserQuery.substring(3).trim())
                 : null))
         : null;
     if (numericId != null && numericId > 0) {
@@ -1398,6 +1550,11 @@ class HybridLoader {
         return [];
       }
     }
+
+    final cleanQuery = Settings.composeQueryWithDefaultTags(
+      rawUserQuery,
+      applyDefaultTags: applyDefaultTags,
+    );
 
     final selectedLangs = getSelectedLanguages();
     String targetLang = selectedLangs.length == 1 ? selectedLangs.first : 'all';
@@ -1473,12 +1630,17 @@ class HybridLoader {
     // 3) random 검색 및 seed 분리
     bool isRandom = false;
     double? randomSeed;
-    final queryTokens = cleanQuery.split(' ');
-    if (queryTokens.any((x) => x == 'random' || x.startsWith('random:'))) {
+    final queryTokens =
+        cleanQuery.split(RegExp(r'\s+')).where((x) => x.isNotEmpty).toList();
+    if (queryTokens.any((x) {
+      final norm = x.replaceAll(RegExp(r'[\(\)]'), '').toLowerCase();
+      return norm == 'random' || norm.startsWith('random:');
+    })) {
       isRandom = true;
       for (final t in queryTokens) {
-        if (t.startsWith('random:')) {
-          randomSeed = double.tryParse(t.split('random:').last);
+        final norm = t.replaceAll(RegExp(r'[\(\)]'), '').toLowerCase();
+        if (norm.startsWith('random:')) {
+          randomSeed = double.tryParse(norm.split('random:').last);
           break;
         }
       }
@@ -1486,12 +1648,16 @@ class HybridLoader {
     }
 
     // 온라인 및 태그 검색용 순수 검색어 (random, order 제외)
-    final pureTokens = queryTokens.where(
-      (x) => x != 'random' && !x.startsWith('random:') && !x.startsWith('order:'),
-    ).toList();
+    final pureTokens = queryTokens
+        .where((x) => !QueryBooleanParser.isDirectiveToken(x))
+        .toList();
 
     // 언어 토큰까지 검사하여 targetLang을 추출하고 비언어 토큰만 분리
-    final nonLangTokens = pureTokens.where((x) => !isLanguageToken(x)).toList();
+    final nonLangTokens = pureTokens.where((x) {
+      final stripped = x.replaceAll(RegExp(r'[\(\)]'), '').trim().toLowerCase();
+      if (stripped.isEmpty || stripped == 'or') return false;
+      return !isLanguageToken(x);
+    }).toList();
     final pureQueryWithoutLang = nonLangTokens
         .map((x) => x.replaceAll(RegExp(r'[\(\)]'), '').trim())
         .where((x) => x.isNotEmpty)
@@ -1648,12 +1814,32 @@ class HybridLoader {
       onTimeout: () => <QueryResult>[],
     );
 
-    // 2) E-Hentai 검색 (random 태그 제외한 pureQuery 사용)
+    // 2) E-Hentai 검색 (random 태그 제외한 pureQuery 사용, OR 분기 지원)
     var ehSucceeded = false;
     final violetFuture = Future<List<QueryResult>>(() async {
       if (effectiveSortMode != SearchSortMode.latest && pureQueryWithoutLang.isEmpty) return [];
       try {
-        final ehQuery = formatEHentaiQuery(pureQuery, targetLang);
+        final ehQueries = buildEHentaiQueries(pureQuery, targetLang);
+        if (ehQueries.length > 1) {
+          final branchOffset = (page - 1) * 25;
+          final branchResults = await Future.wait(
+            ehQueries.map((q) => HentaiManager.searchEHentai(q, branchOffset)),
+          );
+          ehSucceeded = true;
+          final mergedList = <QueryResult>[];
+          final seenEhIds = <int>{};
+          for (final list in branchResults) {
+            for (final qr in list) {
+              qr.result['source'] = 'ehentai';
+              if (seenEhIds.add(qr.id())) {
+                mergedList.add(qr);
+              }
+            }
+          }
+          return mergedList;
+        }
+
+        final ehQuery = ehQueries.first;
         if (pageSize <= 25) {
           final offset = (page - 1) * pageSize;
           final list = await HentaiManager.searchEHentai(ehQuery, offset);
@@ -1868,10 +2054,38 @@ class HybridLoader {
       merged.removeWhere((item) => Settings.isExcluded(item, currentQuery: pureQuery));
     }
 
-    // 복합 쿼리 및 부정/품번/범위 조건 사후 정밀 검증 필터링 (2차 안전망)
-    if (nonLangTokens.length > 1 ||
-        nonLangTokens.any(_isFilterOrNegativeToken)) {
-      merged.retainWhere((item) => matchesAllQueryTokens(item, nonLangTokens));
+    // 복합 쿼리 및 OR/부정/품번/범위 조건 사후 정밀 검증 필터링 (2차 안전망)
+    final parsedPostFilterAst = QueryBooleanParser.parse(pureQuery);
+    if (parsedPostFilterAst != null &&
+        (QueryBooleanParser.containsOr(pureQuery) ||
+            nonLangTokens.length > 1 ||
+            nonLangTokens.any(_isFilterOrNegativeToken))) {
+      QueryBoolNode? stripLangNodes(QueryBoolNode node) {
+        switch (node) {
+          case QueryTermNode(:final coreToken):
+            return _isExplicitLangTerm(coreToken) ? null : node;
+          case QueryNotNode(:final child):
+            final next = stripLangNodes(child);
+            return next == null ? null : QueryNotNode(next);
+          case QueryAndNode(:final children):
+            final next = children.map(stripLangNodes).whereType<QueryBoolNode>().toList();
+            if (next.isEmpty) return null;
+            return next.length == 1 ? next.first : QueryAndNode(next);
+          case QueryOrNode(:final children):
+            final next = children.map(stripLangNodes).whereType<QueryBoolNode>().toList();
+            if (next.isEmpty) return null;
+            return next.length == 1 ? next.first : QueryOrNode(next);
+        }
+      }
+
+      final postAst = _hasLangInsideOr(parsedPostFilterAst)
+          ? parsedPostFilterAst
+          : stripLangNodes(parsedPostFilterAst);
+      if (postAst != null) {
+        merged.retainWhere(
+          (item) => QueryBooleanParser.matchesQueryNode(item, postAst),
+        );
+      }
     }
 
     if (isRandom && randomSeed != null) {

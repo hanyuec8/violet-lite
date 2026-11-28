@@ -77,7 +77,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => 1963632743;
+  int get rustContentHash => -991644036;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -387,6 +387,8 @@ abstract class RustLibApi extends BaseApi {
   MangaTranslationResult crateApiTranslationTranslateMangaJapaneseSync({
     required String text,
   });
+
+  Uint32List crateApiNozomiUnionNozomiIds({required List<Uint32List> lists});
 
   Future<FscmFileInfo> crateApiMessageSearchVerifyFscmFile({
     required String path,
@@ -2580,6 +2582,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Uint32List crateApiNozomiUnionNozomiIds({required List<Uint32List> lists}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_list_prim_u_32_strict(lists, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 70)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_prim_u_32_strict,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiNozomiUnionNozomiIdsConstMeta,
+        argValues: [lists],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiNozomiUnionNozomiIdsConstMeta =>
+      const TaskConstMeta(debugName: "union_nozomi_ids", argNames: ["lists"]);
+
+  @override
   Future<FscmFileInfo> crateApiMessageSearchVerifyFscmFile({
     required String path,
   }) {
@@ -2591,7 +2616,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 70,
+            funcId: 71,
             port: port_,
           );
         },

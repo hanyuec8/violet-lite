@@ -52,6 +52,37 @@ List<Widget> buildSearchGroup(BuildContext context, VoidCallback onReload) {
         },
       ),
       ListTile(
+        leading: Icon(MdiIcons.tag, color: Settings.majorColor.value),
+        title: Text(Translations.instance!.trans('defaulttag')),
+        subtitle: Text(
+          Settings.normalizedDefaultTags.isNotEmpty
+              ? Settings.normalizedDefaultTags
+              : '설정된 기본 태그 없음',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 13,
+            color: Colors.grey.shade600,
+          ),
+        ),
+        trailing: const Icon(Icons.keyboard_arrow_right),
+        onTap: () async {
+          final vv = await showDialog<(int, String)?>(
+            context: context,
+            builder: (BuildContext context) =>
+                const TagSelectorDialog(what: 'default'),
+          );
+
+          if (vv?.$1 == 1) {
+            final normalized =
+                vv!.$2.trim().replaceAll(RegExp(r'\s+'), ' ');
+            await Settings.defaultTags.setValue(normalized);
+            SearchPageController.current?.doSearch();
+            onReload();
+          }
+        },
+      ),
+      ListTile(
         leading: Icon(MdiIcons.tagOff, color: Settings.majorColor.value),
         title: Text(Translations.instance!.trans('excludetag')),
         trailing: const Icon(Icons.keyboard_arrow_right),

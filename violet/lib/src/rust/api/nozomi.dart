@@ -14,3 +14,8 @@ Uint32List parseNozomiBytes({required List<int> bytes}) =>
 /// 최신순(내림차순)으로 정렬하여 반환합니다.
 Uint32List intersectNozomiIds({required List<Uint32List> lists}) =>
     RustLib.instance.api.crateApiNozomiIntersectNozomiIds(lists: lists);
+
+/// 복수 개의 Nozomi ID 리스트들을 입력받아 합집합(Union)을 고속 산출하고
+/// 중복 제거 후 최신순(내림차순)으로 정렬하여 반환합니다.
+Uint32List unionNozomiIds({required List<Uint32List> lists}) =>
+    RustLib.instance.api.crateApiNozomiUnionNozomiIds(lists: lists);

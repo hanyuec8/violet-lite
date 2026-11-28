@@ -461,7 +461,8 @@ class HentaiManager {
       String formatForEH(String raw) {
         var s = raw.trim();
         if (s.isEmpty) return '';
-        if (s.contains(' or ') || s.contains(' OR ') || (s.startsWith('(') && s.endsWith(')'))) {
+        if (RegExp(r'(?:^|[\s\(])or(?:$|[\s\)])', caseSensitive: false)
+            .hasMatch(s)) {
           final langs = <String>[];
           final lower = s.toLowerCase();
           if (lower.contains('korean')) langs.add('korean');
@@ -474,8 +475,13 @@ class HentaiManager {
             return '';
           }
         }
-        s = s.replaceAll(RegExp(r'\blang:', caseSensitive: false), 'language:');
-        return s.replaceAll('_', ' ').trim();
+        s = s
+            .replaceAll(RegExp(r'[\(\)]'), ' ')
+            .replaceAll(RegExp(r'\blang:', caseSensitive: false), 'language:')
+            .replaceAll('_', ' ')
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
+        return s;
       }
 
       final networkInclude = Settings.includeTagNetwork.value

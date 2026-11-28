@@ -21,6 +21,16 @@ class PatchModel {
 
 final patches = [
   PatchModel(
+    dateTime: DateTime(2026, 11, 28),
+    version: '2.2.10 Patch',
+    contents: [
+      'Search: added Default Tag settings applied from the main feed and OR boolean search support',
+    ],
+    contentsKorean: [
+      '검색: 첫 화면부터 적용되는 기본 태그 설정 및 OR 불리언 검색 지원 추가',
+    ],
+  ),
+  PatchModel(
     dateTime: DateTime(2026, 11, 27),
     version: '2.2.9 Patch',
     contents: [

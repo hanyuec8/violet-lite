@@ -57,6 +57,30 @@ pub fn intersect_nozomi_ids(lists: Vec<Vec<u32>>) -> Vec<u32> {
     result
 }
 
+/// 복수 개의 Nozomi ID 리스트들을 입력받아 합집합(Union)을 고속 산출하고
+/// 중복 제거 후 최신순(내림차순)으로 정렬하여 반환합니다.
+#[flutter_rust_bridge::frb(sync)]
+pub fn union_nozomi_ids(lists: Vec<Vec<u32>>) -> Vec<u32> {
+    if lists.is_empty() {
+        return Vec::new();
+    }
+
+    let total_hint: usize = lists.iter().map(|l| l.len()).sum();
+    let mut union_set: AHashSet<u32> = AHashSet::with_capacity(total_hint);
+
+    for list in lists {
+        union_set.extend(list);
+    }
+
+    if union_set.is_empty() {
+        return Vec::new();
+    }
+
+    let mut result: Vec<u32> = union_set.into_iter().collect();
+    result.sort_unstable_by(|a, b| b.cmp(a));
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -84,6 +108,19 @@ mod tests {
 
         // 빈 리스트가 포함된 경우
         let empty_result = intersect_nozomi_ids(vec![vec![1, 2], vec![]]);
+        assert!(empty_result.is_empty());
+    }
+
+    #[test]
+    fn test_union_nozomi_ids() {
+        let list1 = vec![100, 300, 200];
+        let list2 = vec![200, 400, 500];
+        let list3: Vec<u32> = Vec::new();
+
+        let result = union_nozomi_ids(vec![list1, list2, list3]);
+        assert_eq!(result, vec![500, 400, 300, 200, 100]);
+
+        let empty_result = union_nozomi_ids(vec![]);
         assert!(empty_result.is_empty());
     }
 }

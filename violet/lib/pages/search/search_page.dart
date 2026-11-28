@@ -106,6 +106,7 @@ class _SearchPageState extends ThemeSwitchableState<SearchPage>
         page: 1,
         pageSize: SearchPageController.defaultPageSize,
         sortMode: c.searchSortMode.value,
+        applyDefaultTags: widget.searchKeyWord == null,
       );
 
       if (generation != _searchGeneration) {
@@ -398,11 +399,17 @@ class _SearchPageState extends ThemeSwitchableState<SearchPage>
   Widget searchBar() {
     final hasQuery =
         c.latestQuery != null && c.latestQuery!.$2.trim().isNotEmpty;
+    final activeDefaultTags = widget.searchKeyWord == null
+        ? Settings.normalizedDefaultTags
+        : '';
+    final hasDefaultTags = activeDefaultTags.isNotEmpty;
     final searchHintText = hasQuery
         ? c.latestQuery!.$2
-        : widget.searchKeyWord ??
-            trans.Translations.instance?.trans('search') ??
-            'Search';
+        : hasDefaultTags
+            ? '기본 태그: $activeDefaultTags'
+            : widget.searchKeyWord ??
+                trans.Translations.instance?.trans('search') ??
+                'Search';
 
     return ListenableBuilder(
       listenable: MessageCorpusManager.instance,

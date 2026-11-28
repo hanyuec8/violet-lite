@@ -63,6 +63,7 @@ class Settings {
     }
     return '($language)';
   }());
+  static final defaultTags = SettingItem<String>('defaulttags', '');
   static final excludeTags = SettingItem<List<String>>('excludetags', []);
   static final blurredTags = SettingItem<List<String>>('blurredtags', []);
   static final favoriteTags = SettingItem<List<String>>('favoritetags', []);
@@ -108,6 +109,54 @@ class Settings {
       .map((e) => e.startsWith('-') ? e : '-$e')
       .join(' ')
       .trim();
+
+  static String get normalizedDefaultTags =>
+      defaultTags.value.trim().replaceAll(RegExp(r'\s+'), ' ');
+
+  /// 사용자 검색어에 설정된 기본 태그([defaultTags])를 연산자 우선순위가 깨지지 않게 결합합니다.
+  /// 순수 품번 단독 검색(`123456` 또는 `id:123456`)에는 기본 태그를 강제하지 않습니다.
+  static String composeQueryWithDefaultTags(
+    String userQuery, {
+    bool applyDefaultTags = true,
+  }) {
+    final trimmedUser = userQuery.trim();
+    if (!applyDefaultTags) return trimmedUser;
+
+    final baseTags = normalizedDefaultTags;
+    if (baseTags.isEmpty) return trimmedUser;
+    if (trimmedUser.isEmpty) return baseTags;
+
+    final isSingleNumericId = !trimmedUser.startsWith('-') &&
+        (int.tryParse(trimmedUser) != null ||
+            (trimmedUser.toLowerCase().startsWith('id:') &&
+                int.tryParse(trimmedUser.substring(3).trim()) != null));
+    if (isSingleNumericId) return trimmedUser;
+
+    final directivePattern = RegExp(
+      r'^(?:random(?::.*)?|order:[a-zA-Z0-9_-]+)$',
+      caseSensitive: false,
+    );
+    final userTokens =
+        trimmedUser.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
+    final directives = <String>[];
+    final bodyTokens = <String>[];
+
+    for (final tok in userTokens) {
+      if (directivePattern.hasMatch(tok)) {
+        directives.add(tok);
+      } else {
+        bodyTokens.add(tok);
+      }
+    }
+
+    final directiveSuffix =
+        directives.isNotEmpty ? ' ${directives.join(' ')}' : '';
+    final userBody = bodyTokens.join(' ').trim();
+    if (userBody.isEmpty) {
+      return '($baseTags)$directiveSuffix';
+    }
+    return '($baseTags) ($userBody)$directiveSuffix';
+  }
 
   static bool isIdExcludeRule(String rawRule) {
     var rule = rawRule.trim().toLowerCase();
